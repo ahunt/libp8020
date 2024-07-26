@@ -6,3 +6,4 @@ authors = ["Andrzej Hunt"]
 
 [dependencies]
 serialport = "4.4.0"
+time = {version = "0.3.36", features = ["formatting", "macros"] }
