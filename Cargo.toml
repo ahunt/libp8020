@@ -5,3 +5,4 @@ edition = "2021"
 authors = ["Andrzej Hunt"]
 
 [dependencies]
+serialport = "4.4.0"
