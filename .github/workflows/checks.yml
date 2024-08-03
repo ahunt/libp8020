@@ -1,0 +1,22 @@
+---
+name: build & test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Diagnostics
+        run: |
+          rustc --version
+          cargo --version
+      - name: Compile
+        run: cargo -v build
+      - name: Check
+        run: cargo -v test
