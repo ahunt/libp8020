@@ -197,4 +197,18 @@ fn main() {
     }
 
     send(&mut port, "G"); // Release from external control
+
+    for i in 1..args.exercises {
+        let ambient_avg = (exercises[i].ambient_samples.iter().sum::<f64>()
+            + exercises[i + 1].ambient_samples.iter().sum::<f64>())
+            / ((exercises[i].ambient_samples.len() + exercises[i + 1].ambient_samples.len())
+                as f64);
+        let specimen_avg = exercises[i].specimen_samples.iter().sum::<f64>()
+            / (exercises[i].specimen_samples.len() as f64);
+        let fit_factor = specimen_avg / ambient_avg;
+        // TODO: 8020A only appears to print decimal for FF < (maybe) 10, should
+        // we do the same here?
+        println!("Exercise {}: FF {:.1}", i, fit_factor);
+    }
+    // TODO: print avg FF.
 }
