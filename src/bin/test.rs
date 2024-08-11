@@ -102,7 +102,8 @@ fn main() {
     std::thread::sleep(std::time::Duration::from_secs(1));
     send(&mut port, "VN"); // Switch valve on
 
-    let exercises = &mut vec![Exercise::new(&args); args.exercises].into_boxed_slice();
+    // Additional exercise is used for the final ambient samples (specimen samples are left empty).
+    let exercises = &mut vec![Exercise::new(&args); args.exercises + 1].into_boxed_slice();
     let mut current_exercise = 0;
 
     // Get rid of any buffered junk - this is possible if the device was already
@@ -130,6 +131,10 @@ fn main() {
                     current.ambient_samples.len()
                 );
                 current.specimen_switch_received = true;
+                // Final (i.e. additional) exercise is used only for ambient sample storage.
+                if current_exercise == args.exercises + 1 {
+                    break;
+                }
                 continue;
             }
             "VN" => {
@@ -191,10 +196,5 @@ fn main() {
         }
     }
 
-    // TODO: perform final ambient sampling.
-
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    send(&mut port, "VF"); // Switch valve off again, to ensure we're sampling via sample tube.
-    std::thread::sleep(std::time::Duration::from_secs(1));
     send(&mut port, "G"); // Release from external control
 }
