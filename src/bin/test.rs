@@ -153,7 +153,10 @@ fn main() {
                 }
                 continue;
             }
-            // TODO: handle beep (Bxx). Currently we fall through to Unexpected message received below (nbd).
+            ref m if m.starts_with("B") => {
+                // Ignore - the Portacount mirrors these.
+                break;
+            }
             _ => (),
         }
 
