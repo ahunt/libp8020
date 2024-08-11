@@ -176,7 +176,7 @@ fn main() {
                 send(&mut port, "VF"); // Switch valve off
             }
         } else if !current.specimen_switch_received {
-            eprintln!("Received ambient sample after requesting valve switch");
+            eprintln!("Received (unexpected) ambient sample after requesting valve switch. That's fine, it just means something was slow.");
         } else if current.specimen_purges_done < args.specimen_purge_time {
             current.specimen_purges_done += 1;
         } else if current.specimen_samples.len() < args.specimen_sample_time {
@@ -187,7 +187,7 @@ fn main() {
                 send(&mut port, "B05"); // Beep
             }
         } else {
-            eprintln!("Received specimen sample after requesting valve switch");
+            eprintln!("Received (unexpected) specimen sample after requesting valve switch. That's fine, it just means something was slow.");
         }
     }
 
