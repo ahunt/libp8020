@@ -1,5 +1,4 @@
 extern crate serialport;
-use std::io::BufRead;
 
 // TODO: enumerate devices dynamically
 const DEVICE: &str = "/dev/ttyUSB0";
