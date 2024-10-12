@@ -120,7 +120,10 @@ fn main() {
         }
     }
 
+    send(&mut port, "N01"); // Exercise 1
+    std::thread::sleep(std::time::Duration::from_millis(100));
     send(&mut port, "B40"); // Beep
+    std::thread::sleep(std::time::Duration::from_millis(100));
 
     for line in reader.lines() {
         let contents = line.unwrap();
@@ -167,6 +170,10 @@ fn main() {
                 // Ignore - the Portacount mirrors these.
                 continue;
             }
+            ref m if m.starts_with("N") => {
+                // Ignore - the Portacount mirrors these.
+                continue;
+            }
             _ => (),
         }
 
@@ -193,6 +200,9 @@ fn main() {
             current.specimen_samples.push(value);
             if current.specimen_samples.len() == args.specimen_sample_time {
                 send(&mut port, "VN"); // Switch valve on
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                // current_exercise is incremented later, and we also need to convert from zero to human indexing.
+                send(&mut port, format!("N{:02}", current_exercise + 2).as_str()); // Exercise N
                 std::thread::sleep(std::time::Duration::from_millis(100));
                 send(&mut port, "B05"); // Beep
             }
