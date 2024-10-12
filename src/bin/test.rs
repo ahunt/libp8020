@@ -95,12 +95,17 @@ fn main() {
     // already in external control mode etc.
     send(&mut port, "J"); // Invoke External Control
 
-    // Either flow control is broken, or my adapter is broken, or the 8020A is
-    // too slow to do flow control right. A 1s sleep after every outgoing
-    // message seems to work.
-    // TODO: do more testing to verify which (if any) of the above is true.
-    std::thread::sleep(std::time::Duration::from_secs(1));
+    // Flow control is a bit laggy or broken: sending a second message within
+    // approx 52ms of a previous message will result in the second message being
+    // ignored (which obviously breaks subsequent assumptions).
+    // To be safe I use a 100ms delay. (For my device, the threshold was right
+    // around 52ms, but it may be different for other devices/computers/OS's/
+    // whatever.)
+    // It's also entirely possible that the problem is with my serial/USB adapter.
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
     send(&mut port, "VN"); // Switch valve on
+    std::thread::sleep(std::time::Duration::from_millis(100));
 
     // Additional exercise is used for the final ambient samples (specimen samples are left empty).
     let exercises = &mut vec![Exercise::new(&args); args.exercises + 1].into_boxed_slice();
@@ -188,7 +193,7 @@ fn main() {
             current.specimen_samples.push(value);
             if current.specimen_samples.len() == args.specimen_sample_time {
                 send(&mut port, "VN"); // Switch valve on
-                std::thread::sleep(std::time::Duration::from_secs(1));
+                std::thread::sleep(std::time::Duration::from_millis(100));
                 send(&mut port, "B05"); // Beep
             }
         } else {
