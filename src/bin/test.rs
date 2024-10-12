@@ -205,7 +205,7 @@ fn main() {
                 as f64);
         let specimen_avg = exercises[i].specimen_samples.iter().sum::<f64>()
             / (exercises[i].specimen_samples.len() as f64);
-        let fit_factor = specimen_avg / ambient_avg;
+        let fit_factor = ambient_avg / specimen_avg;
         // TODO: 8020A only appears to print decimal for FF < (maybe) 10, should
         // we do the same here?
         println!("Exercise {}: FF {:.1}", i, fit_factor);
