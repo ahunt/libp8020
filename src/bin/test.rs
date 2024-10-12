@@ -160,7 +160,7 @@ fn main() {
             }
             ref m if m.starts_with("B") => {
                 // Ignore - the Portacount mirrors these.
-                break;
+                continue;
             }
             _ => (),
         }
