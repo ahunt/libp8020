@@ -198,7 +198,7 @@ fn main() {
 
     send(&mut port, "G"); // Release from external control
 
-    for i in 1..args.exercises {
+    for i in 0..args.exercises {
         let ambient_avg = (exercises[i].ambient_samples.iter().sum::<f64>()
             + exercises[i + 1].ambient_samples.iter().sum::<f64>())
             / ((exercises[i].ambient_samples.len() + exercises[i + 1].ambient_samples.len())
