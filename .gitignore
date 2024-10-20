@@ -1,3 +1,5 @@
 target/
 debug/
 *~
+# Generated as part of build
+libp8020a.h

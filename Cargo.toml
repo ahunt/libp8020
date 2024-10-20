@@ -8,6 +8,9 @@ authors = ["Andrzej Hunt"]
 name = "p8020a"
 crate-type = ["staticlib"]
 
+[build-dependencies]
+cbindgen = "0.24.0"
+
 [dependencies]
 clap = {version = "4.5.13", features = ["derive"] }
 serialport = "4.4.0"
