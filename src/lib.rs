@@ -188,6 +188,8 @@ impl Device {
 
         send(&mut self.port, "N01"); // Exercise 1
         std::thread::sleep(std::time::Duration::from_millis(100));
+        send(&mut self.port, "I01000000"); // In progress. Other indicators are also possible, but uninteresting for my use case.
+        std::thread::sleep(std::time::Duration::from_millis(100));
         send(&mut self.port, "B40"); // Beep
         std::thread::sleep(std::time::Duration::from_millis(100));
 
@@ -245,6 +247,10 @@ impl Device {
                     continue;
                 }
                 ref m if m.starts_with("N") => {
+                    // Ignore - the Portacount mirrors these.
+                    continue;
+                }
+                ref m if m.starts_with("I") => {
                     // Ignore - the Portacount mirrors these.
                     continue;
                 }
