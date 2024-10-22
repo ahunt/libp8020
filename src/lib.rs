@@ -229,15 +229,13 @@ impl Device {
                         current.specimen_samples.iter().sum::<f64>()
                             / (current.specimen_samples.len() as f64)
                     );
-                    if current_exercise == test_config.exercise_count {
-                        break;
-                    }
-
-                    if let Some(callback) = &test_config.test_callback {
-                        let notification = TestNotification::StateChange(
-                            TestState::StartedExercise(current_exercise),
-                        );
-                        callback(&notification, test_config.test_callback_data);
+                    if current_exercise != test_config.exercise_count {
+                        if let Some(callback) = &test_config.test_callback {
+                            let notification = TestNotification::StateChange(
+                                TestState::StartedExercise(current_exercise),
+                            );
+                            callback(&notification, test_config.test_callback_data);
+                        }
                     }
 
                     continue;
@@ -306,6 +304,9 @@ impl Device {
                                 TestNotification::ExerciseResult(current_exercise - 1, fit_factor);
                             callback(&notification, test_config.test_callback_data);
                         }
+                    }
+                    if current_exercise == test_config.exercise_count {
+                        break;
                     }
                 }
             } else if !current.specimen_switch_received {
