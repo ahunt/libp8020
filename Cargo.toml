@@ -1,11 +1,10 @@
 [package]
-name = "p8020a"
+name = "p8020"
 version = "0.1.0"
 edition = "2021"
 authors = ["Andrzej Hunt"]
 
 [lib]
-name = "p8020a"
 crate-type = ["staticlib"]
 
 [build-dependencies]
