@@ -71,6 +71,12 @@ impl TestConfig {
         }))
     }
 
+    fn send_notification(self: &Self, notification: &TestNotification) {
+        if let Some(callback) = &self.test_callback {
+            callback(&notification, self.test_callback_data);
+        }
+    }
+
     // TODO: add test_config_free
 }
 
@@ -239,12 +245,9 @@ impl Device {
                             / (current.specimen_samples.len() as f64)
                     );
                     if current_exercise != test_config.exercise_count {
-                        if let Some(callback) = &test_config.test_callback {
-                            let notification = TestNotification::StateChange(
-                                TestState::StartedExercise(current_exercise),
-                            );
-                            callback(&notification, test_config.test_callback_data);
-                        }
+                        test_config.send_notification(&TestNotification::StateChange(
+                            TestState::StartedExercise(current_exercise),
+                        ));
                     }
 
                     continue;
@@ -266,11 +269,7 @@ impl Device {
 
             let value = match f64::from_str(message) {
                 Ok(res) => {
-                    if let Some(callback) = &test_config.test_callback {
-                        let notification = TestNotification::RawSample(res);
-                        callback(&notification, test_config.test_callback_data);
-                    }
-
+                    test_config.send_notification(&TestNotification::RawSample(res));
                     res
                 }
                 Err(_) => {
@@ -307,12 +306,10 @@ impl Device {
                             / (exercises[current_exercise - 1].specimen_samples.len() as f64);
                         let fit_factor = ambient_avg / specimen_avg;
                         println!("Exercise {}: FF {:.1}", current_exercise, fit_factor);
-
-                        if let Some(callback) = &test_config.test_callback {
-                            let notification =
-                                TestNotification::ExerciseResult(current_exercise - 1, fit_factor);
-                            callback(&notification, test_config.test_callback_data);
-                        }
+                        test_config.send_notification(&TestNotification::ExerciseResult(
+                            current_exercise - 1,
+                            fit_factor,
+                        ));
                     }
                     if current_exercise == test_config.exercise_count {
                         break;
