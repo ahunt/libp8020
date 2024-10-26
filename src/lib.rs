@@ -16,6 +16,17 @@ pub enum TestState {
     Finished,
 }
 
+// TODO: figure out if this is really the most FFI-friendly representation. A
+// struct with index+value+enum indicating sample type might be nicer (albeit
+// less rusty, I think).
+#[repr(C)]
+pub enum Sample {
+    AmbientPurge { index: usize, value: f64 },
+    AmbientSample { index: usize, value: f64 },
+    SpecimenPurge { index: usize, value: f64 },
+    SpecimenSample { index: usize, value: f64 },
+}
+
 #[repr(C)]
 pub enum TestNotification {
     /// StateChange indicates that the test has changed state, e.g. a new
@@ -37,6 +48,11 @@ pub enum TestNotification {
     // in the mask haven't settled yet (I'm not convinced that this is a real
     // issue, but being able to visualise this data will help verify).
     RawSample(f64),
+    /// Sample indicates a fresh sample from the 8020. This differs from
+    /// RawSample in that it contains metadata about how this reading is being
+    /// used and where it came from (ambient vs specimen, sample vs purge).
+    /// moreover, this data is only available during a test.
+    Sample(Sample),
 }
 
 #[repr(C)]
@@ -279,9 +295,22 @@ impl Device {
             };
 
             if current.ambient_purges_done < test_config.ambient_purge_time {
+                test_config.send_notification(&TestNotification::Sample(Sample::AmbientPurge {
+                    index: current.ambient_purges_done,
+                    value: value,
+                }));
                 current.ambient_purges_done += 1;
             } else if current.ambient_samples.len() < test_config.ambient_sample_time {
                 current.ambient_samples.push(value);
+                test_config.send_notification(&TestNotification::Sample(Sample::AmbientSample {
+                    // Notifying after appending to ambient_samples above forces us to perform
+                    // an ugly subtraction, but avoids the risk of a callback receiver
+                    // inadvertently trying to read a not-yet-existing value from
+                    // ambient_samples. (At this time, clients cannot see ambient_samples, but
+                    // that could change in future.)
+                    index: current.ambient_samples.len() - 1,
+                    value: value,
+                }));
                 if current.ambient_samples.len() == test_config.ambient_sample_time {
                     send(&mut self.port, "VF"); // Switch valve off
 
@@ -319,8 +348,16 @@ impl Device {
                 eprintln!("Received (unexpected) ambient sample after requesting valve switch. That's fine, it just means something was slow.");
             } else if current.specimen_purges_done < test_config.specimen_purge_time {
                 current.specimen_purges_done += 1;
+                test_config.send_notification(&TestNotification::Sample(Sample::SpecimenPurge {
+                    index: current.specimen_purges_done,
+                    value: value,
+                }));
             } else if current.specimen_samples.len() < test_config.specimen_sample_time {
                 current.specimen_samples.push(value);
+                test_config.send_notification(&TestNotification::Sample(Sample::SpecimenSample {
+                    index: current.specimen_samples.len() - 1,
+                    value: value,
+                }));
                 if current.specimen_samples.len() == test_config.specimen_sample_time {
                     send(&mut self.port, "VN"); // Switch valve on
                     std::thread::sleep(std::time::Duration::from_millis(100));
