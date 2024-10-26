@@ -21,10 +21,26 @@ pub enum TestState {
 // less rusty, I think).
 #[repr(C)]
 pub enum Sample {
-    AmbientPurge { index: usize, value: f64 },
-    AmbientSample { index: usize, value: f64 },
-    SpecimenPurge { index: usize, value: f64 },
-    SpecimenSample { index: usize, value: f64 },
+    AmbientPurge {
+        exercise: usize,
+        index: usize,
+        value: f64,
+    },
+    AmbientSample {
+        exercise: usize,
+        index: usize,
+        value: f64,
+    },
+    SpecimenPurge {
+        exercise: usize,
+        index: usize,
+        value: f64,
+    },
+    SpecimenSample {
+        exercise: usize,
+        index: usize,
+        value: f64,
+    },
 }
 
 #[repr(C)]
@@ -296,6 +312,7 @@ impl Device {
 
             if current.ambient_purges_done < test_config.ambient_purge_time {
                 test_config.send_notification(&TestNotification::Sample(Sample::AmbientPurge {
+                    exercise: current_exercise,
                     index: current.ambient_purges_done,
                     value: value,
                 }));
@@ -303,6 +320,7 @@ impl Device {
             } else if current.ambient_samples.len() < test_config.ambient_sample_time {
                 current.ambient_samples.push(value);
                 test_config.send_notification(&TestNotification::Sample(Sample::AmbientSample {
+                    exercise: current_exercise,
                     // Notifying after appending to ambient_samples above forces us to perform
                     // an ugly subtraction, but avoids the risk of a callback receiver
                     // inadvertently trying to read a not-yet-existing value from
@@ -349,12 +367,14 @@ impl Device {
             } else if current.specimen_purges_done < test_config.specimen_purge_time {
                 current.specimen_purges_done += 1;
                 test_config.send_notification(&TestNotification::Sample(Sample::SpecimenPurge {
+                    exercise: current_exercise,
                     index: current.specimen_purges_done,
                     value: value,
                 }));
             } else if current.specimen_samples.len() < test_config.specimen_sample_time {
                 current.specimen_samples.push(value);
                 test_config.send_notification(&TestNotification::Sample(Sample::SpecimenSample {
+                    exercise: current_exercise,
                     index: current.specimen_samples.len() - 1,
                     value: value,
                 }));
