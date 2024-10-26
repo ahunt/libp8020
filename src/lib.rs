@@ -74,6 +74,14 @@ impl TestConfig {
     // TODO: add test_config_free
 }
 
+#[repr(C)]
+pub struct TestResult {
+    exercise_count: usize,
+    fit_factors: *mut f64,
+}
+
+// TODO: add impl TestResult with p8020_test_result_free() for FFI clients.
+
 // TODO: refactor this into something sensible.
 // TODO: introduce proper error handling.
 fn send(port: &mut Box<dyn serialport::SerialPort>, msg: &str) {
@@ -151,8 +159,9 @@ impl Device {
 
     /// Run a fit test. This function - and all its callbacks - is/are entirely
     /// synchronous (see also comment on TestConfig).
+    // TODO: split this into an FFI vs non-FFI version, where only the FFI version has to leak.
     #[export_name = "device_run_test"]
-    pub extern "C" fn run_test(self: &mut Self, test_config: &TestConfig) -> bool {
+    pub extern "C" fn run_test(self: &mut Self, test_config: &TestConfig) -> *mut TestResult {
         // TODO: rewrite all this. It works, but it's totally inelegant.
 
         // TODO: do some probing first to determine whether the Portacount is
@@ -333,6 +342,7 @@ impl Device {
 
         send(&mut self.port, "G"); // Release from external control
 
+        let mut fit_factors = vec![0.0f64; test_config.exercise_count];
         for i in 0..test_config.exercise_count {
             let ambient_avg = (exercises[i].ambient_samples.iter().sum::<f64>()
                 + exercises[i + 1].ambient_samples.iter().sum::<f64>())
@@ -344,10 +354,16 @@ impl Device {
             // TODO: 8020A only appears to print decimal for FF < (maybe) 10, should
             // we do the same here?
             println!("Exercise {}: FF {:.1}", i, fit_factor);
+            fit_factors[i] = fit_factor;
         }
         // TODO: print avg FF.
-        // TODO: implement this.
-        return false;
+
+        let ret = Box::leak(Box::new(TestResult {
+            exercise_count: test_config.exercise_count,
+            fit_factors: fit_factors.as_mut_ptr(),
+        }));
+        std::mem::forget(fit_factors);
+        ret
     }
 
     #[export_name = "device_free"]
