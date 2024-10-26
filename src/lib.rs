@@ -69,6 +69,11 @@ pub enum TestNotification {
     /// used and where it came from (ambient vs specimen, sample vs purge).
     /// moreover, this data is only available during a test.
     Sample(Sample),
+    LiveFF {
+        exercise: usize,
+        index: usize,
+        fit_factor: f64,
+    },
 }
 
 #[repr(C)]
@@ -378,6 +383,18 @@ impl Device {
                     index: current.specimen_samples.len() - 1,
                     value: value,
                 }));
+
+                // TODO: refactor this out into into its own fn.
+                // This calculation is not cached, because calculating the average of (usually) 5 f64s is NBD.
+                let ambient_avg = current.ambient_samples.iter().sum::<f64>()
+                    / (current.ambient_samples.len() as f64);
+                let fit_factor = ambient_avg / value;
+                test_config.send_notification(&TestNotification::LiveFF {
+                    exercise: current_exercise,
+                    index: current.specimen_samples.len() - 1,
+                    fit_factor: fit_factor,
+                });
+
                 if current.specimen_samples.len() == test_config.specimen_sample_time {
                     send(&mut self.port, "VN"); // Switch valve on
                     std::thread::sleep(std::time::Duration::from_millis(100));
