@@ -1,4 +1,4 @@
-# 8020A-RS
+# libp8020
 
 A collection of utils (and perhaps a library in future) for 8020A's. This may or
 may not work with your 8020A, any 8020, 8020M, or other devices.
