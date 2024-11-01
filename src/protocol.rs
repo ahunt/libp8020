@@ -11,7 +11,7 @@ struct Indicator {
     pass: bool,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum Command {
     EnterExternalControl,
     ExitExternalControl,
@@ -27,6 +27,54 @@ enum Command {
     DisplayExercise(u8),
     Indicator(Indicator),
     ClearDisplay,
+}
+
+#[derive(Debug, PartialEq)]
+enum InvalidCommandError {
+    OutOfRange {
+        command: Command,
+        allowed_range: std::ops::Range<u8>,
+    },
+}
+
+impl Command {
+    fn to_wire(self: &Self) -> Result<String, InvalidCommandError> {
+        match self {
+            Command::EnterExternalControl => Ok("J".to_string()),
+            Command::ExitExternalControl => Ok("G".to_string()),
+            Command::Beep {
+                duration_deciseconds,
+            } => match duration_deciseconds {
+                1..=99 => Ok(format!("B{:02}", duration_deciseconds)),
+                _ => Err(InvalidCommandError::OutOfRange {
+                    command: self.clone(),
+                    allowed_range: std::ops::Range { start: 1, end: 100 },
+                }),
+            },
+            Command::ValveAmbient => Ok("VN".to_string()),
+            Command::ValveSpecimen => Ok("VF".to_string()),
+            Command::DisplayExercise(exercise) => match exercise {
+                0..=19 => Ok(format!("N{:02}", exercise)),
+                _ => Err(InvalidCommandError::OutOfRange {
+                    command: self.clone(),
+                    allowed_range: std::ops::Range { start: 0, end: 20 },
+                }),
+            },
+            Command::Indicator(indicator) => {
+                let mut out = String::with_capacity(9);
+                out.push_str("I0");
+                out.push(if indicator.in_progress { '1' } else { '0' });
+                out.push(if indicator.fit_factor { '1' } else { '0' });
+                out.push(if indicator.service { '1' } else { '0' });
+                out.push(if indicator.low_particle { '1' } else { '0' });
+                out.push(if indicator.low_battery { '1' } else { '0' });
+                out.push(if indicator.fail { '1' } else { '0' });
+                out.push(if indicator.pass { '1' } else { '0' });
+                Ok(out)
+            }
+            Command::ClearDisplay => Ok("K".to_string()),
+        }
+    }
 }
 
 /// Message represents any message sent by the device. This can be a response,
@@ -189,6 +237,237 @@ fn parse_message(message: &str) -> Result<Message, ParseError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_command_to_wire() {
+        let empty_indicator = Indicator {
+            in_progress: false,
+            fit_factor: false,
+            service: false,
+            low_particle: false,
+            low_battery: false,
+            fail: false,
+            pass: false,
+        };
+
+        struct TestCase<'a> {
+            name: &'a str,
+            input: Command,
+            expected_result: Result<String, InvalidCommandError>,
+        }
+        let tests = [
+            TestCase {
+                name: "EnterExternalControl",
+                input: Command::EnterExternalControl,
+                expected_result: Ok("J".to_string()),
+            },
+            TestCase {
+                name: "ExitExternalControl",
+                input: Command::ExitExternalControl,
+                expected_result: Ok("G".to_string()),
+            },
+            TestCase {
+                name: "Beep0",
+                input: Command::Beep {
+                    duration_deciseconds: 0,
+                },
+                expected_result: Err(InvalidCommandError::OutOfRange {
+                    command: Command::Beep {
+                        duration_deciseconds: 0,
+                    },
+                    allowed_range: std::ops::Range { start: 1, end: 100 },
+                }),
+            },
+            TestCase {
+                name: "Beep1",
+                input: Command::Beep {
+                    duration_deciseconds: 1,
+                },
+                expected_result: Ok("B01".to_string()),
+            },
+            TestCase {
+                name: "Beep9",
+                input: Command::Beep {
+                    duration_deciseconds: 9,
+                },
+                expected_result: Ok("B09".to_string()),
+            },
+            TestCase {
+                name: "Beep10",
+                input: Command::Beep {
+                    duration_deciseconds: 10,
+                },
+                expected_result: Ok("B10".to_string()),
+            },
+            TestCase {
+                name: "Beep99",
+                input: Command::Beep {
+                    duration_deciseconds: 99,
+                },
+                expected_result: Ok("B99".to_string()),
+            },
+            TestCase {
+                name: "Beep100",
+                input: Command::Beep {
+                    duration_deciseconds: 100,
+                },
+                expected_result: Err(InvalidCommandError::OutOfRange {
+                    command: Command::Beep {
+                        duration_deciseconds: 100,
+                    },
+                    allowed_range: std::ops::Range { start: 1, end: 100 },
+                }),
+            },
+            TestCase {
+                name: "ValveAmbient",
+                input: Command::ValveAmbient,
+                expected_result: Ok("VN".to_string()),
+            },
+            TestCase {
+                name: "ValveSpecimen",
+                input: Command::ValveSpecimen,
+                expected_result: Ok("VF".to_string()),
+            },
+            TestCase {
+                name: "DisplayExercise0",
+                input: Command::DisplayExercise(0),
+                expected_result: Ok("N00".to_string()),
+            },
+            TestCase {
+                name: "DisplayExercise1",
+                input: Command::DisplayExercise(1),
+                expected_result: Ok("N01".to_string()),
+            },
+            TestCase {
+                name: "DisplayExercise9",
+                input: Command::DisplayExercise(9),
+                expected_result: Ok("N09".to_string()),
+            },
+            TestCase {
+                name: "DisplayExercise10",
+                input: Command::DisplayExercise(10),
+                expected_result: Ok("N10".to_string()),
+            },
+            TestCase {
+                name: "DisplayExercise19",
+                input: Command::DisplayExercise(19),
+                expected_result: Ok("N19".to_string()),
+            },
+            TestCase {
+                name: "DisplayExercise20",
+                input: Command::DisplayExercise(20),
+                expected_result: Err(InvalidCommandError::OutOfRange {
+                    command: Command::DisplayExercise(20),
+                    allowed_range: std::ops::Range { start: 0, end: 20 },
+                }),
+            },
+            TestCase {
+                name: "IndicatorEmpty",
+                input: Command::Indicator(empty_indicator),
+                expected_result: Ok("I00000000".to_string()),
+            },
+            TestCase {
+                name: "IndicatorInProgress",
+                input: Command::Indicator(Indicator {
+                    in_progress: true,
+                    ..empty_indicator
+                }),
+                expected_result: Ok("I01000000".to_string()),
+            },
+            TestCase {
+                name: "IndicatorFitFactor",
+                input: Command::Indicator(Indicator {
+                    fit_factor: true,
+                    ..empty_indicator
+                }),
+                expected_result: Ok("I00100000".to_string()),
+            },
+            TestCase {
+                name: "IndicatorService",
+                input: Command::Indicator(Indicator {
+                    service: true,
+                    ..empty_indicator
+                }),
+                expected_result: Ok("I00010000".to_string()),
+            },
+            TestCase {
+                name: "IndicatorLowParticle",
+                input: Command::Indicator(Indicator {
+                    low_particle: true,
+                    ..empty_indicator
+                }),
+                expected_result: Ok("I00001000".to_string()),
+            },
+            TestCase {
+                name: "IndicatorLowBattery",
+                input: Command::Indicator(Indicator {
+                    low_battery: true,
+                    ..empty_indicator
+                }),
+                expected_result: Ok("I00000100".to_string()),
+            },
+            TestCase {
+                name: "IndicatorFail",
+                input: Command::Indicator(Indicator {
+                    fail: true,
+                    ..empty_indicator
+                }),
+                expected_result: Ok("I00000010".to_string()),
+            },
+            TestCase {
+                name: "IndicatorPass",
+                input: Command::Indicator(Indicator {
+                    pass: true,
+                    ..empty_indicator
+                }),
+                expected_result: Ok("I00000001".to_string()),
+            },
+            TestCase {
+                name: "IndicatorMulti1",
+                input: Command::Indicator(Indicator {
+                    in_progress: true,
+                    pass: true,
+                    ..empty_indicator
+                }),
+                expected_result: Ok("I01000001".to_string()),
+            },
+            TestCase {
+                name: "IndicatorMulti2",
+                input: Command::Indicator(Indicator {
+                    fit_factor: true,
+                    service: true,
+                    ..empty_indicator
+                }),
+                expected_result: Ok("I00110000".to_string()),
+            },
+            TestCase {
+                name: "IndicatorAll",
+                input: Command::Indicator(Indicator {
+                    in_progress: true,
+                    fit_factor: true,
+                    service: true,
+                    low_particle: true,
+                    low_battery: true,
+                    fail: true,
+                    pass: true,
+                }),
+                expected_result: Ok("I01111111".to_string()),
+            },
+            TestCase {
+                name: "ClearDisplay",
+                input: Command::ClearDisplay,
+                expected_result: Ok("K".to_string()),
+            },
+        ];
+        for case in tests {
+            let got = case.input.to_wire();
+            assert_eq!(
+                got, case.expected_result,
+                "{}: got={got:?}, want={:?}",
+                case.name, case.expected_result
+            );
+        }
+    }
 
     #[test]
     fn test_parse_message() {
