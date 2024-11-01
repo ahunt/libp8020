@@ -4,6 +4,8 @@ extern crate serialport;
 use std::io::BufRead;
 use std::str::FromStr;
 
+mod protocol;
+
 pub struct Device {
     port: Box<dyn serialport::SerialPort>,
     reader: std::io::BufReader<Box<dyn serialport::SerialPort>>,
