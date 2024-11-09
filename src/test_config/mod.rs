@@ -95,7 +95,7 @@ impl TestConfig {
         let mut line = String::with_capacity(64);
         loop {
             line.clear();
-            let len = match csv.read_line(&mut line) {
+            match csv.read_line(&mut line) {
                 // EOF
                 Ok(0) => {
                     break;
