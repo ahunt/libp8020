@@ -16,14 +16,14 @@ enum TestStage {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct TestConfig {
+pub struct TestConfig {
     name: String,
     short_name: String,
     stages: Vec<TestStage>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum ValidationError {
+pub enum ValidationError {
     InvalidConfig,
 }
 

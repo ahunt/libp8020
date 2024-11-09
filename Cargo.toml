@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Andrzej Hunt"]
 
 [lib]
-crate-type = ["staticlib"]
+crate-type = ["lib", "staticlib"]
 
 [build-dependencies]
 cbindgen = "0.24.0"
