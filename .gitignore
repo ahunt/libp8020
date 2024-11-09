@@ -1,5 +1,6 @@
 target/
 debug/
 *~
+fuzz/Cargo.lock
 # Generated as part of build
 libp8020.h
