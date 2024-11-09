@@ -1,4 +1,8 @@
-#[derive(Clone)]
+mod builtin;
+
+use std::str::FromStr;
+
+#[derive(Clone, Debug, PartialEq)]
 enum TestStage {
     AmbientSample {
         purge_count: u8,
@@ -11,7 +15,7 @@ enum TestStage {
     },
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 struct TestConfig {
     name: String,
     short_name: String,
@@ -21,6 +25,15 @@ struct TestConfig {
 #[derive(Debug, PartialEq, Eq)]
 enum ValidationError {
     InvalidConfig,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ParseError<'a> {
+    IoError(String),
+    InvalidExerciseStage(&'a str),
+    InvalidAmbientStage(&'a str),
+    InvalidTestHeader(&'a str),
+    Other(String),
 }
 
 impl TestConfig {
@@ -67,14 +80,196 @@ impl TestConfig {
                 }
             }
         }
-
         Ok(())
+    }
+
+    pub fn parse_from_csv(csv: &mut dyn std::io::BufRead) -> Result<TestConfig, ParseError> {
+        // This could be implemented using a csv parser. But... aside from NIH,
+        // I'm averse to including more deps just to save 5 lines.
+        // Ooops... looks like it's actually about 20 lines (modulo
+        // application-specific logic).
+
+        let mut stages = Vec::new();
+        let mut test_header: Option<(String, String)> = None;
+
+        let mut line = String::with_capacity(64);
+        loop {
+            line.clear();
+            let len = match csv.read_line(&mut line) {
+                // EOF
+                Ok(0) => {
+                    break;
+                }
+                Ok(i) => i,
+                Err(e) => return Err(ParseError::IoError(e.to_string())),
+            };
+
+            let data = line.trim();
+            if data.len() == 0 || data.chars().nth(0).unwrap() == '#' {
+                continue;
+            }
+
+            // Note: any additional columns are ignored for reasons of forward
+            // compatibility. However, we do not allow comments in any column.
+            let cols: Vec<&str> = match data
+                .split(',')
+                .map(|col| {
+                    if col.trim().starts_with("#") {
+                        Err(())
+                    } else {
+                        Ok(col)
+                    }
+                })
+                .collect()
+            {
+                Err(_) => {
+                    return Err(ParseError::Other(
+                        "inline comments are prohibited".to_string(),
+                    ))
+                }
+                Ok(res) => res,
+            };
+
+            // TODO: support field quoting.
+            match cols[0] {
+                "TEST" => {
+                    if cols.len() < 3 {
+                        return Err(ParseError::InvalidTestHeader(
+                            "test header (TEST line) must contain >= 3 fields",
+                        ));
+                    }
+                    test_header = Some((String::from(cols[1]), String::from(cols[2])));
+                }
+                "AMBIENT" => {
+                    if cols.len() < 3 {
+                        return Err(ParseError::InvalidAmbientStage(
+                            "ambient stage must contain >= 3 fields",
+                        ));
+                    }
+                    let purge_count = if let Ok(i) = u8::from_str(cols[1]) {
+                        i
+                    } else {
+                        return Err(ParseError::InvalidAmbientStage(
+                            "ambient stage purge count must be an integer between 0 and 255",
+                        ));
+                    };
+                    // There is no need to validate counts here - that's the validator's
+                    // responsibility.
+                    let sample_count = if let Ok(i) = u16::from_str(cols[2]) {
+                        i
+                    } else {
+                        return Err(ParseError::InvalidAmbientStage(
+                            "ambient stage purge count must be an integer between 0 and {u16::MAX}",
+                        ));
+                    };
+                    stages.push(TestStage::AmbientSample {
+                        purge_count: purge_count,
+                        sample_count: sample_count,
+                    });
+                }
+                "EXERCISE" => {
+                    if cols.len() < 4 {
+                        return Err(ParseError::InvalidExerciseStage(
+                            "exercise stage must contain >= 4 fields",
+                        ));
+                    }
+                    let purge_count = if let Ok(i) = u8::from_str(cols[1]) {
+                        i
+                    } else {
+                        return Err(ParseError::InvalidExerciseStage(
+                            "exercise stage purge count must be an integer between 0 and 255",
+                        ));
+                    };
+                    let sample_count = if let Ok(i) = u16::from_str(cols[2]) {
+                        i
+                    } else {
+                        return Err(ParseError::InvalidExerciseStage("exercise stage purge count must be an integer between 0 and {u16::MAX}"));
+                    };
+                    stages.push(TestStage::Exercise {
+                        name: if cols[3].len() > 0 {
+                            cols[3].to_string()
+                        } else {
+                            "<no name>".to_string()
+                        },
+                        purge_count: purge_count,
+                        sample_count: sample_count,
+                    });
+                }
+                // We must fail on lines that we do not understand. This means we won't be
+                // forward-compatible against new stages/commands/whatever - but we have no
+                // choice because skipping commands could result in a test that doesn't match
+                // the user's expectation.
+                // (This differs from above, where we ignore additional fields, because we
+                // assume that additional fields won't functionally alter the test. I
+                // apologise in advance if my assumptions end up being incorrect.)
+                cmd => {
+                    let mut msg = String::from("unsupported stage/command: ");
+                    msg.push_str(cmd);
+                    return Err(ParseError::Other(msg));
+                }
+            }
+        }
+        if test_header.is_none() {
+            return Err(ParseError::InvalidTestHeader(
+                "test header (TEST line) not found",
+            ));
+        }
+
+        let (name, short_name) = test_header.unwrap();
+        Ok(TestConfig {
+            name: name,
+            short_name: short_name,
+            stages: stages,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse_osha_fast_ffp() {
+        let mut cursor = std::io::Cursor::new(builtin::OSHA_FAST_FFP.as_bytes());
+        let result = TestConfig::parse_from_csv(&mut cursor);
+        assert_eq!(
+            result,
+            Ok(TestConfig {
+                name: "\"OSHA Fast FFP (Modified Filtering Facepiece protocol)\"".to_string(),
+                short_name: "osha_fast_ffp".to_string(),
+                stages: vec![
+                    TestStage::AmbientSample {
+                        purge_count: 4,
+                        sample_count: 5,
+                    },
+                    TestStage::Exercise {
+                        purge_count: 11,
+                        sample_count: 30,
+                        name: "\"Bending Over\"".to_string(),
+                    },
+                    TestStage::Exercise {
+                        purge_count: 0,
+                        sample_count: 30,
+                        name: "\"Talking\"".to_string(),
+                    },
+                    TestStage::Exercise {
+                        purge_count: 0,
+                        sample_count: 30,
+                        name: "\"Head Side-to-Side\"".to_string(),
+                    },
+                    TestStage::Exercise {
+                        purge_count: 0,
+                        sample_count: 30,
+                        name: "\"Head Up-and-Down\"".to_string(),
+                    },
+                    TestStage::AmbientSample {
+                        purge_count: 4,
+                        sample_count: 5,
+                    },
+                ],
+            })
+        );
+    }
 
     #[test]
     fn test_validate() {
