@@ -5,6 +5,7 @@ use std::io::BufRead;
 use std::str::FromStr;
 
 mod protocol;
+mod test_config;
 
 pub struct Device {
     port: Box<dyn serialport::SerialPort>,
