@@ -1,0 +1,21 @@
+# AMBIENT AEROSOL CONDENSATION NUCLEI COUNTER (CNC) QUANTITATIVE FIT TESTING PROTOCOL.
+# https://www.osha.gov/laws-regs/regulations/standardnumber/1910/1910.134AppA#:~:text=3.%20AMBIENT%20AEROSOL%20CONDENSATION%20NUCLEI%20COUNTER%20(CNC)%20QUANTITATIVE%20FIT%20TESTING%20PROTOCOL.
+# This corresponds to a standard 8-exercise test on an 8020(A). All exercises (including grimace) use the same purge+sample durations.
+TEST,"OSHA Legacy (8020 implementation)",osha_legacy
+AMBIENT,4,5
+EXERCISE,11,40,"Normal breathing"
+AMBIENT,4,5
+EXERCISE,11,40,"Deep breathing"
+AMBIENT,4,5
+EXERCISE,11,40,"Turning head side to side"
+AMBIENT,4,5
+EXERCISE,11,40,"Moving head up and down"
+AMBIENT,4,5
+EXERCISE,11,40,"Talking"
+AMBIENT,4,5
+EXERCISE,11,40,"Grimace"
+AMBIENT,4,5
+EXERCISE,11,40,"Bending over"
+AMBIENT,4,5
+EXERCISE,11,40,"Normal breathing"
+AMBIENT,4,5

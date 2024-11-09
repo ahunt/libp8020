@@ -1,0 +1,27 @@
+# FTTP's Crash2.5 protocol. See details in the spreadsheet on https://www.testtheplanet.org/
+TEST,"Crash 2.5",crash2.5
+AMBIENT,4,5
+EXERCISE,11,40,"Relax"
+AMBIENT,4,5
+EXERCISE,11,40,"2x Jaw Motion"
+AMBIENT,4,5
+EXERCISE,11,40,"Relax"
+AMBIENT,4,5
+EXERCISE,11,40,"Relax"
+AMBIENT,4,5
+EXERCISE,11,40,"2x Jaw Motion"
+AMBIENT,4,5
+EXERCISE,11,40,"Relax"
+AMBIENT,4,5
+EXERCISE,11,40,"Relax"
+AMBIENT,4,5
+EXERCISE,11,40,"2x Jaw Motion"
+AMBIENT,4,5
+EXERCISE,11,40,"Relax"
+AMBIENT,4,5
+EXERCISE,11,40,"Relax"
+AMBIENT,4,5
+EXERCISE,11,40,"2x Jaw Motion"
+AMBIENT,4,5
+EXERCISE,11,40,"Relax"
+AMBIENT,4,5
