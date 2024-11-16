@@ -1,18 +1,34 @@
 use std::str::FromStr;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Indicator {
-    in_progress: bool,
-    fit_factor: bool,
-    service: bool,
-    low_particle: bool,
-    low_battery: bool,
-    fail: bool,
-    pass: bool,
+pub struct Indicator {
+    pub in_progress: bool,
+    pub fit_factor: bool,
+    pub service: bool,
+    pub low_particle: bool,
+    pub low_battery: bool,
+    pub fail: bool,
+    pub pass: bool,
+}
+
+const EMPTY_INDICATOR: Indicator = Indicator {
+    in_progress: false,
+    fit_factor: false,
+    service: false,
+    low_particle: false,
+    low_battery: false,
+    fail: false,
+    pass: false,
+};
+
+impl Indicator {
+    pub fn empty() -> Indicator {
+        EMPTY_INDICATOR
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-enum Command {
+pub enum Command {
     EnterExternalControl,
     ExitExternalControl,
     Beep {
@@ -30,7 +46,7 @@ enum Command {
 }
 
 #[derive(Debug, PartialEq)]
-enum InvalidCommandError {
+pub enum InvalidCommandError {
     OutOfRange {
         command: Command,
         allowed_range: std::ops::Range<u8>,
@@ -38,7 +54,7 @@ enum InvalidCommandError {
 }
 
 impl Command {
-    fn to_wire(self: &Self) -> Result<String, InvalidCommandError> {
+    pub fn to_wire(self: &Self) -> Result<String, InvalidCommandError> {
         match self {
             Command::EnterExternalControl => Ok("J".to_string()),
             Command::ExitExternalControl => Ok("G".to_string()),
@@ -85,7 +101,7 @@ impl Command {
 /// to any command that the PortaCount didn't understand; the Settings command
 /// triggers a list of settings across multiple messages; etc.).
 #[derive(Debug, PartialEq)]
-enum Message {
+pub enum Message {
     Response(Command),
     /// Error response. Note: UnknownError might be returned instead of the
     /// original command could not be parsed.
@@ -95,7 +111,7 @@ enum Message {
 }
 
 #[derive(Debug)]
-struct ParseError {
+pub struct ParseError {
     received_message: String,
     reason: String,
 }
@@ -179,7 +195,7 @@ fn parse_command(command: &str) -> Result<Command, ParseError> {
 /// understood. This does not indicate any problem with the device, it merely
 /// indicates that we don't know what the message was intended to mean, and/or
 /// that support for this message is not yet implemented.
-fn parse_message(message: &str) -> Result<Message, ParseError> {
+pub fn parse_message(message: &str) -> Result<Message, ParseError> {
     if message.is_empty() {
         return Err(ParseError {
             received_message: message.to_string(),
@@ -240,16 +256,6 @@ mod tests {
 
     #[test]
     fn test_command_to_wire() {
-        let empty_indicator = Indicator {
-            in_progress: false,
-            fit_factor: false,
-            service: false,
-            low_particle: false,
-            low_battery: false,
-            fail: false,
-            pass: false,
-        };
-
         struct TestCase<'a> {
             name: &'a str,
             input: Command,
@@ -363,14 +369,14 @@ mod tests {
             },
             TestCase {
                 name: "IndicatorEmpty",
-                input: Command::Indicator(empty_indicator),
+                input: Command::Indicator(EMPTY_INDICATOR),
                 expected_result: Ok("I00000000".to_string()),
             },
             TestCase {
                 name: "IndicatorInProgress",
                 input: Command::Indicator(Indicator {
                     in_progress: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }),
                 expected_result: Ok("I01000000".to_string()),
             },
@@ -378,7 +384,7 @@ mod tests {
                 name: "IndicatorFitFactor",
                 input: Command::Indicator(Indicator {
                     fit_factor: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }),
                 expected_result: Ok("I00100000".to_string()),
             },
@@ -386,7 +392,7 @@ mod tests {
                 name: "IndicatorService",
                 input: Command::Indicator(Indicator {
                     service: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }),
                 expected_result: Ok("I00010000".to_string()),
             },
@@ -394,7 +400,7 @@ mod tests {
                 name: "IndicatorLowParticle",
                 input: Command::Indicator(Indicator {
                     low_particle: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }),
                 expected_result: Ok("I00001000".to_string()),
             },
@@ -402,7 +408,7 @@ mod tests {
                 name: "IndicatorLowBattery",
                 input: Command::Indicator(Indicator {
                     low_battery: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }),
                 expected_result: Ok("I00000100".to_string()),
             },
@@ -410,7 +416,7 @@ mod tests {
                 name: "IndicatorFail",
                 input: Command::Indicator(Indicator {
                     fail: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }),
                 expected_result: Ok("I00000010".to_string()),
             },
@@ -418,7 +424,7 @@ mod tests {
                 name: "IndicatorPass",
                 input: Command::Indicator(Indicator {
                     pass: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }),
                 expected_result: Ok("I00000001".to_string()),
             },
@@ -427,7 +433,7 @@ mod tests {
                 input: Command::Indicator(Indicator {
                     in_progress: true,
                     pass: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }),
                 expected_result: Ok("I01000001".to_string()),
             },
@@ -436,7 +442,7 @@ mod tests {
                 input: Command::Indicator(Indicator {
                     fit_factor: true,
                     service: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }),
                 expected_result: Ok("I00110000".to_string()),
             },
@@ -471,16 +477,6 @@ mod tests {
 
     #[test]
     fn test_parse_message() {
-        let empty_indicator = Indicator {
-            in_progress: false,
-            fit_factor: false,
-            service: false,
-            low_particle: false,
-            low_battery: false,
-            fail: false,
-            pass: false,
-        };
-
         struct TestCase<'a> {
             name: &'a str,
             input: &'a str,
@@ -592,14 +588,14 @@ mod tests {
             TestCase {
                 name: "IndicatorEmpty",
                 input: "I00000000",
-                expected_result: Ok(Message::Response(Command::Indicator(empty_indicator))),
+                expected_result: Ok(Message::Response(Command::Indicator(EMPTY_INDICATOR))),
             },
             TestCase {
                 name: "IndicatorInProgress",
                 input: "I01000000",
                 expected_result: Ok(Message::Response(Command::Indicator(Indicator {
                     in_progress: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }))),
             },
             TestCase {
@@ -607,7 +603,7 @@ mod tests {
                 input: "I00100000",
                 expected_result: Ok(Message::Response(Command::Indicator(Indicator {
                     fit_factor: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }))),
             },
             TestCase {
@@ -615,7 +611,7 @@ mod tests {
                 input: "I00010000",
                 expected_result: Ok(Message::Response(Command::Indicator(Indicator {
                     service: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }))),
             },
             TestCase {
@@ -623,7 +619,7 @@ mod tests {
                 input: "I00001000",
                 expected_result: Ok(Message::Response(Command::Indicator(Indicator {
                     low_particle: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }))),
             },
             TestCase {
@@ -631,7 +627,7 @@ mod tests {
                 input: "I00000100",
                 expected_result: Ok(Message::Response(Command::Indicator(Indicator {
                     low_battery: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }))),
             },
             TestCase {
@@ -639,7 +635,7 @@ mod tests {
                 input: "I00000010",
                 expected_result: Ok(Message::Response(Command::Indicator(Indicator {
                     fail: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }))),
             },
             TestCase {
@@ -647,7 +643,7 @@ mod tests {
                 input: "I00000001",
                 expected_result: Ok(Message::Response(Command::Indicator(Indicator {
                     pass: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }))),
             },
             TestCase {
@@ -657,7 +653,7 @@ mod tests {
                     in_progress: true,
                     fail: true,
                     pass: true,
-                    ..empty_indicator
+                    ..EMPTY_INDICATOR
                 }))),
             },
         ];
