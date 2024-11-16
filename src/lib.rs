@@ -4,6 +4,7 @@ extern crate serialport;
 use std::io::BufRead;
 use std::str::FromStr;
 
+mod ffi;
 mod protocol;
 mod test;
 pub mod test_config;

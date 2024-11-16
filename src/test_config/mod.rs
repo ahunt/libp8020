@@ -1,4 +1,4 @@
-mod builtin;
+pub mod builtin;
 
 use std::str::FromStr;
 

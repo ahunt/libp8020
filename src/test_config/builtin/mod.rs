@@ -4,7 +4,7 @@ pub const OSHA_FAST_FFP: &str = include_str!("osha_fast_ffp.csv");
 pub const OSHA_FAST_ELASTO: &str = include_str!("osha_fast_elasto.csv");
 pub const CRASH_2_5: &str = include_str!("crash_2_5.csv");
 
-const BUILTIN_CONFIGS: [&str; 5] = [
+pub const BUILTIN_CONFIGS: [&str; 5] = [
     OSHA,
     OSHA_LEGACY,
     OSHA_FAST_FFP,
