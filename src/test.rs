@@ -242,6 +242,9 @@ impl Test<'_> {
         test.send_notification(&TestNotification::StateChange(TestState::StartedExercise(
             0,
         )));
+        tx_command.send(Command::Beep {
+            duration_deciseconds: 40,
+        })?;
         Ok(test)
     }
 
@@ -325,9 +328,11 @@ impl Test<'_> {
 
             if self.current_stage == self.config.stages.len() {
                 self.tx_command.send(Command::ValveSpecimen)?;
-                self.tx_command.send(Command::ClearDisplay)?;
                 *valve_state = ValveState::AwaitingSpecimen;
-                self.tx_command.send(Command::ValveSpecimen)?;
+                self.tx_command.send(Command::ClearDisplay)?;
+                self.tx_command.send(Command::Beep {
+                    duration_deciseconds: 99,
+                })?;
                 return Ok(StepOutcome::TestComplete);
             }
 
@@ -354,6 +359,9 @@ impl Test<'_> {
                 let device_exercise = ((self.exercises_completed + 1) % 20) as u8;
                 self.tx_command
                     .send(Command::DisplayExercise(device_exercise))?;
+                self.tx_command.send(Command::Beep {
+                    duration_deciseconds: 10,
+                })?;
             }
         }
         Ok(StepOutcome::None)
