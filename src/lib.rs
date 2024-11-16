@@ -5,7 +5,15 @@ use std::io::BufRead;
 use std::str::FromStr;
 
 mod protocol;
+mod test;
 pub mod test_config;
+
+enum ValveState {
+    Specimen,
+    AwaitingAmbient,
+    Ambient,
+    AwaitingSpecimen,
+}
 
 pub struct Device {
     port: Box<dyn serialport::SerialPort>,
