@@ -3,23 +3,32 @@ mod builtin;
 use std::str::FromStr;
 
 #[derive(Clone, Debug, PartialEq)]
-enum TestStage {
-    AmbientSample {
-        purge_count: u8,
-        sample_count: u16,
-    },
-    Exercise {
-        name: String,
-        purge_count: u8,
-        sample_count: u16,
-    },
+pub struct StageCounts {
+    pub purge_count: usize,
+    pub sample_count: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TestStage {
+    AmbientSample { counts: StageCounts },
+    Exercise { name: String, counts: StageCounts },
+}
+
+impl TestStage {
+    pub fn is_ambient_sample(self: &Self) -> bool {
+        matches!(self, TestStage::AmbientSample { .. })
+    }
+
+    pub fn is_exercise(self: &Self) -> bool {
+        matches!(self, TestStage::Exercise { .. })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TestConfig {
     name: String,
     short_name: String,
-    stages: Vec<TestStage>,
+    pub stages: Vec<TestStage>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -72,10 +81,10 @@ impl TestConfig {
                 // purging (that's the case for the abbreviated protocols). Skipping the
                 // ambient purge is probably a bad idea, but it doesn't break anything.
                 let sample_count = match stage {
-                    TestStage::AmbientSample { sample_count, .. }
-                    | TestStage::Exercise { sample_count, .. } => sample_count,
+                    TestStage::AmbientSample { counts, .. }
+                    | TestStage::Exercise { counts, .. } => counts.sample_count,
                 };
-                if *sample_count < 1 {
+                if sample_count < 1 {
                     return Err(ValidationError::InvalidConfig);
                 }
             }
@@ -163,8 +172,10 @@ impl TestConfig {
                         ));
                     };
                     stages.push(TestStage::AmbientSample {
-                        purge_count: purge_count,
-                        sample_count: sample_count,
+                        counts: StageCounts {
+                            purge_count: purge_count as usize,
+                            sample_count: sample_count as usize,
+                        },
                     });
                 }
                 "EXERCISE" => {
@@ -191,8 +202,10 @@ impl TestConfig {
                         } else {
                             "<no name>".to_string()
                         },
-                        purge_count: purge_count,
-                        sample_count: sample_count,
+                        counts: StageCounts {
+                            purge_count: purge_count as usize,
+                            sample_count: sample_count as usize,
+                        },
                     });
                 }
                 // We must fail on lines that we do not understand. This means we won't be
@@ -239,32 +252,44 @@ mod tests {
                 short_name: "osha_fast_ffp".to_string(),
                 stages: vec![
                     TestStage::AmbientSample {
-                        purge_count: 4,
-                        sample_count: 5,
+                        counts: StageCounts {
+                            purge_count: 4,
+                            sample_count: 5,
+                        },
                     },
                     TestStage::Exercise {
-                        purge_count: 11,
-                        sample_count: 30,
+                        counts: StageCounts {
+                            purge_count: 11,
+                            sample_count: 30,
+                        },
                         name: "\"Bending Over\"".to_string(),
                     },
                     TestStage::Exercise {
-                        purge_count: 0,
-                        sample_count: 30,
+                        counts: StageCounts {
+                            purge_count: 0,
+                            sample_count: 30,
+                        },
                         name: "\"Talking\"".to_string(),
                     },
                     TestStage::Exercise {
-                        purge_count: 0,
-                        sample_count: 30,
+                        counts: StageCounts {
+                            purge_count: 0,
+                            sample_count: 30,
+                        },
                         name: "\"Head Side-to-Side\"".to_string(),
                     },
                     TestStage::Exercise {
-                        purge_count: 0,
-                        sample_count: 30,
+                        counts: StageCounts {
+                            purge_count: 0,
+                            sample_count: 30,
+                        },
                         name: "\"Head Up-and-Down\"".to_string(),
                     },
                     TestStage::AmbientSample {
-                        purge_count: 4,
-                        sample_count: 5,
+                        counts: StageCounts {
+                            purge_count: 4,
+                            sample_count: 5,
+                        },
                     },
                 ],
             })
@@ -294,8 +319,10 @@ mod tests {
                 name: "OneAmbientStage",
                 input: &TestConfig {
                     stages: vec![TestStage::AmbientSample {
-                        purge_count: 0,
-                        sample_count: 1,
+                        counts: StageCounts {
+                            purge_count: 0,
+                            sample_count: 1,
+                        },
                     }],
                     ..base_config.clone()
                 },
@@ -306,12 +333,16 @@ mod tests {
                 input: &TestConfig {
                     stages: vec![
                         TestStage::AmbientSample {
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                         TestStage::AmbientSample {
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                     ],
                     ..base_config.clone()
@@ -323,16 +354,22 @@ mod tests {
                 input: &TestConfig {
                     stages: vec![
                         TestStage::AmbientSample {
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                         TestStage::AmbientSample {
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                         TestStage::AmbientSample {
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                     ],
                     ..base_config.clone()
@@ -344,21 +381,29 @@ mod tests {
                 input: &TestConfig {
                     stages: vec![
                         TestStage::AmbientSample {
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                         TestStage::Exercise {
                             name: "foo".to_string(),
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                         TestStage::AmbientSample {
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                         TestStage::AmbientSample {
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                     ],
                     ..base_config.clone()
@@ -370,17 +415,23 @@ mod tests {
                 input: &TestConfig {
                     stages: vec![
                         TestStage::AmbientSample {
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                         TestStage::Exercise {
                             name: "foo".to_string(),
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                         TestStage::AmbientSample {
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                     ],
                     ..base_config.clone()
@@ -392,17 +443,23 @@ mod tests {
                 input: &TestConfig {
                     stages: vec![
                         TestStage::AmbientSample {
-                            purge_count: 0,
-                            sample_count: 0,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 0,
+                            },
                         },
                         TestStage::Exercise {
                             name: "foo".to_string(),
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                         TestStage::AmbientSample {
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                     ],
                     ..base_config.clone()
@@ -414,22 +471,30 @@ mod tests {
                 input: &TestConfig {
                     stages: vec![
                         TestStage::AmbientSample {
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                         TestStage::Exercise {
                             name: "foo".to_string(),
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                         TestStage::Exercise {
                             name: "foo".to_string(),
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                         TestStage::AmbientSample {
-                            purge_count: 0,
-                            sample_count: 1,
+                            counts: StageCounts {
+                                purge_count: 0,
+                                sample_count: 1,
+                            },
                         },
                     ],
                     ..base_config.clone()
