@@ -340,16 +340,21 @@ impl Test<'_> {
             self.results
                 .push(StageResults::from(&self.config.stages[self.current_stage]));
 
-            self.tx_command.send(match valve_state {
-                ValveState::Ambient => Command::ValveSpecimen,
-                ValveState::Specimen => Command::ValveAmbient,
-                _ => panic!("should not be processing samples while awaiting valve switch"),
-            })?;
-            *valve_state = match valve_state {
-                ValveState::Ambient => ValveState::AwaitingSpecimen,
-                ValveState::Specimen => ValveState::AwaitingAmbient,
-                _ => panic!("shouldn't be switching valve while awaiting valve switch"),
-            };
+            match self.results.last().unwrap() {
+                StageResults::AmbientSample { .. } => {
+                    eprintln!("starting ambient sample stage");
+                    // We can always assume that valve_state=Sample.
+                    self.tx_command.send(Command::ValveAmbient)?;
+                    *valve_state = ValveState::AwaitingAmbient;
+                }
+                StageResults::Exercise { .. } => {
+                    eprintln!("starting exercise stage");
+                    if !matches!(valve_state, ValveState::Specimen) {
+                        self.tx_command.send(Command::ValveSpecimen)?;
+                        *valve_state = ValveState::AwaitingSpecimen;
+                    }
+                }
+            }
 
             if let StageResults::Exercise { .. } = stage_results {
                 self.exercises_completed += 1;
