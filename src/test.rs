@@ -278,6 +278,50 @@ impl Test<'_> {
         Some(stage_results.append(value))
     }
 
+    fn calculate_ffs(self: &mut Self) {
+        let mut iter = self.results.iter().rev();
+        let ambient_samples = loop {
+            match iter.next() {
+                Some(StageResults::AmbientSample { samples, .. }) => {
+                    break samples.iter().copied();
+                }
+                Some(_) => (),
+                None => panic!(
+                    "must not call calculate_ffs without at least two ambient stages (found 0)"
+                ),
+            }
+        };
+        let ambient_samples = ambient_samples.chain(loop {
+            match iter.next() {
+                Some(StageResults::AmbientSample { samples, .. }) => {
+                    break samples.iter().copied();
+                }
+                Some(_) => (),
+                None => panic!(
+                    "must not call calculate_ffs without at least two ambient stages (found 0)"
+                ),
+            }
+        });
+
+        let mut exercise_averages_stack = Vec::new();
+        let mut iter = self.results.iter().rev().skip(1);
+        while let Some(StageResults::Exercise { samples, .. }) = iter.next() {
+            exercise_averages_stack.push(samples.iter().sum::<f64>() / (samples.len() as f64));
+        }
+
+        let ambients: Vec<f64> = ambient_samples.collect();
+        let ambient_avg = ambients.iter().sum::<f64>() / (ambients.len() as f64);
+
+        while let Some(exercise_avg) = exercise_averages_stack.pop() {
+            let ff = ambient_avg / exercise_avg;
+            self.send_notification(&TestNotification::ExerciseResult(
+                self.exercise_ffs.len(),
+                ff,
+            ));
+            self.exercise_ffs.push(ff);
+        }
+    }
+
     fn process_sample(
         self: &mut Self,
         value: f64,
@@ -317,8 +361,8 @@ impl Test<'_> {
             }
         }
         if stage_results.is_complete() {
-            if stage_results.is_ambient_sample() {
-                // TODO: Calculate final per-exercise FFs.
+            if self.exercises_completed > 0 && stage_results.is_ambient_sample() {
+                self.calculate_ffs();
             }
 
             if self.current_stage == self.config.stages.len() - 1 {
