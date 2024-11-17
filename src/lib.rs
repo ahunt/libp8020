@@ -88,12 +88,18 @@ impl P8020Device {
     /// representing this connection.
     /// Non-rust callers must call device_free to release the returned device.
     #[export_name = "p8020_device_connect"]
-    pub extern "C" fn connect(path_raw: *const libc::c_char) -> *mut P8020Device {
+    pub extern "C" fn connect(
+        path_raw: *const libc::c_char,
+        callback: extern "C" fn(&DeviceNotification, *mut std::ffi::c_void) -> (),
+        callback_data: *mut std::ffi::c_void,
+    ) -> *mut P8020Device {
         let path_cstr = unsafe { std::ffi::CStr::from_ptr(path_raw) };
         let path = String::from_utf8_lossy(path_cstr.to_bytes()).to_string();
 
+        let callback_data = FFICallbackDataHandle(callback_data);
         let (tx_done, rx_done): (Sender<()>, Receiver<()>) = mpsc::channel();
         let device_callback = move |notification: &DeviceNotification| {
+            callback(&notification, callback_data.get());
             if let DeviceNotification::TestCompleted = notification {
                 tx_done.send(()).unwrap();
             }
@@ -150,7 +156,15 @@ impl P8020Device {
 
 #[repr(C)]
 pub enum DeviceNotification {
-    Sample { particles: f64 },
+    /// Sample indicates a fresh reading from the PC. It is safe to assume
+    /// that it was delivered 1s (plus/minus the 8020's internal delays) after
+    /// the previous RawReading. This is simply the latest sample, no more,
+    /// no less - i.e. it might be part of the ambient or specimen purge,
+    /// or from the actually sampling period.
+    // TODO: check specs for what the actual allowed range is.
+    Sample {
+        particles: f64,
+    },
     TestStarted,
     TestCompleted,
     TestCancelled,

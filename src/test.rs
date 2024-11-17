@@ -140,18 +140,6 @@ pub enum TestNotification {
     StateChange(TestState),
     /// ExerciseResult indicates that the FF for exercise N was M.
     ExerciseResult(usize, f64),
-    /// RawSample indicates a fresh reading from the PC. It is safe to assume
-    /// that it was delivered 1s (plus/minus the 8020's internal delays) after
-    /// the previous RawReading. This is simply the latest sample, no more,
-    /// no less - i.e. it might be part of the ambient or specimen purge,
-    /// or from the actually sampling period.
-    // TODO: check specs for what the actual allowed range is.
-    // TODO: move this into a new Device-specific callback. Raw samples are
-    // available as soon as we've connected, and I'd like to see raw samples
-    // prior to starting a test, as it allows you to detect if particle levels
-    // in the mask haven't settled yet (I'm not convinced that this is a real
-    // issue, but being able to visualise this data will help verify).
-    RawSample(f64),
     /// Sample indicates a fresh sample from the 8020. This differs from
     /// RawSample in that it contains metadata about how this reading is being
     /// used and where it came from (ambient vs specimen, sample vs purge).
