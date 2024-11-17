@@ -26,8 +26,8 @@ impl TestStage {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TestConfig {
-    name: String,
-    short_name: String,
+    pub name: String,
+    pub short_name: String,
     pub stages: Vec<TestStage>,
 }
 
@@ -234,6 +234,27 @@ impl TestConfig {
             short_name: short_name,
             stages: stages,
         })
+    }
+
+    pub fn exercise_count(self: &Self) -> usize {
+        self.stages
+            .iter()
+            .filter(|stage| stage.is_exercise())
+            .count()
+    }
+
+    pub fn exercise_names(self: &Self) -> Vec<String> {
+        self.stages
+            .iter()
+            .filter(|stage| stage.is_exercise())
+            .map(|stage| {
+                let TestStage::Exercise { name, .. } = stage else {
+                    panic!("exercises should've been filtered out already");
+                };
+                name
+            })
+            .cloned()
+            .collect()
     }
 }
 
