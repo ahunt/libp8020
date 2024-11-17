@@ -176,7 +176,7 @@ pub enum StepOutcome {
 
 pub struct Test<'a> {
     config: TestConfig,
-    test_callback: Option<fn(&TestNotification)>,
+    test_callback: Option<Box<dyn Fn(&TestNotification) + 'static + std::marker::Send>>,
     // TODO: figure out a better way of representing all of this, it's a little confusing.
     current_stage: usize,
     results: Vec<StageResults>,
@@ -193,11 +193,11 @@ pub struct Test<'a> {
 // to imagine converting this into something device-agnostic with a little spot
 // of tweaking (in conjunction with a CPC-abstraction-layer).
 impl Test<'_> {
-    fn create(
+    fn create<'a>(
         config: TestConfig,
-        tx_command: &Sender<Command>,
-        test_callback: Option<fn(&TestNotification)>,
-    ) -> Test {
+        tx_command: &'a Sender<Command>,
+        test_callback: Option<Box<dyn Fn(&TestNotification) + 'static + std::marker::Send>>,
+    ) -> Test<'a> {
         let stage_count = config.stages.len();
         assert!(
             stage_count >= 3,
@@ -224,7 +224,7 @@ impl Test<'_> {
         config: TestConfig,
         tx_command: &'a Sender<Command>,
         valve_state: &mut ValveState,
-        test_callback: Option<fn(&TestNotification)>,
+        test_callback: Option<Box<dyn Fn(&TestNotification) + 'static + std::marker::Send>>,
     ) -> Result<Test<'a>, SendError<Command>> {
         let test = Self::create(config, tx_command, test_callback);
         match valve_state {
