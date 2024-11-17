@@ -298,8 +298,8 @@ impl Test<'_> {
         valve_state: &mut ValveState,
     ) -> Result<StepOutcome, SendError<Command>> {
         assert!(
-            (self.current_stage == self.config.stages.len()
-                && self.results.last().unwrap().is_complete()),
+            (!(self.current_stage == self.config.stages.len()
+                && self.results.last().unwrap().is_complete())),
             "process_sample must not be called after test completion"
         );
         // TODO: send SampleNotifications
