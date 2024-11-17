@@ -311,13 +311,13 @@ impl Test<'_> {
             assert!(self.last_ambient().has_samples(), "should not be executing exercise without at least one completed ambient sample stage");
             if stage_results.has_samples() {
                 let ambient_avg = self.last_ambient().avg();
-                let live_ff = value / ambient_avg;
+                let live_ff = ambient_avg / value.max(0.01);
                 self.send_notification(&TestNotification::LiveFF {
                     exercise: self.exercises_completed,
                     index: samples.len(),
                     fit_factor: live_ff,
                 });
-                let interim_ff = stage_results.avg() / ambient_avg;
+                let interim_ff = ambient_avg / stage_results.avg().max(0.01);
                 self.send_notification(&TestNotification::InterimFF {
                     exercise: self.exercises_completed,
                     fit_factor: interim_ff,
