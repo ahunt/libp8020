@@ -228,10 +228,10 @@ impl Test<'_> {
     ) -> Result<Test<'a>, SendError<Command>> {
         let test = Self::create(config, tx_command, test_callback);
         match valve_state {
-            ValveState::Specimen | ValveState::AwaitingSpecimen => (),
-            ValveState::Ambient | ValveState::AwaitingAmbient => {
-                tx_command.send(Command::ValveSpecimen)?;
-                *valve_state = ValveState::AwaitingSpecimen;
+            ValveState::Ambient | ValveState::AwaitingAmbient => (),
+            ValveState::Specimen | ValveState::AwaitingSpecimen => {
+                tx_command.send(Command::ValveAmbient)?;
+                *valve_state = ValveState::AwaitingAmbient;
             }
         };
         tx_command.send(Command::Indicator(Indicator {
