@@ -326,7 +326,7 @@ impl Test<'_> {
                 // TODO: Calculate final per-exercise FFs.
             }
 
-            if self.current_stage == self.config.stages.len() {
+            if self.current_stage == self.config.stages.len() - 1 {
                 self.tx_command.send(Command::ValveSpecimen)?;
                 *valve_state = ValveState::AwaitingSpecimen;
                 self.tx_command.send(Command::ClearDisplay)?;
