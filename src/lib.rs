@@ -14,6 +14,7 @@ use std::thread;
 
 use protocol::{Command, Message};
 use test::{StepOutcome, Test, TestNotification};
+use test_config::TestConfig;
 
 enum ValveState {
     Specimen,
@@ -37,43 +38,6 @@ impl FFICallbackDataHandle {
     fn get(self: &Self) -> *mut std::ffi::c_void {
         self.0
     }
-}
-
-pub struct TestConfig {
-    test_callback: Option<extern "C" fn(&TestNotification, *mut std::ffi::c_void) -> ()>,
-    test_callback_data: FFICallbackDataHandle,
-}
-
-impl TestConfig {
-    /// Returns a new TestConfig.
-    /// This is currently hardcoded to run a specific test protocol (check
-    /// sources to verify), and will be rewritten to allow specifying
-    /// the protocol in due time.
-    #[export_name = "test_config_new"]
-    pub extern "C" fn new(_exercise_count: usize) -> *mut TestConfig {
-        Box::leak(Box::new(TestConfig {
-            test_callback: Option::None,
-            test_callback_data: FFICallbackDataHandle(0 as *mut std::ffi::c_void),
-        }))
-    }
-
-    #[export_name = "test_config_set_callback"]
-    pub extern "C" fn set_callback(
-        self: &mut Self,
-        callback: extern "C" fn(&TestNotification, *mut std::ffi::c_void) -> (),
-        callback_data: *mut std::ffi::c_void,
-    ) {
-        self.test_callback = Some(callback);
-        self.test_callback_data = FFICallbackDataHandle(callback_data);
-    }
-
-    fn send_notification(self: &Self, notification: &TestNotification) {
-        if let Some(callback) = &self.test_callback {
-            callback(&notification, self.test_callback_data.get());
-        }
-    }
-
-    // TODO: add test_config_free
 }
 
 #[repr(C)]
@@ -117,20 +81,18 @@ impl P8020Device {
     #[export_name = "p8020_device_run_test"]
     pub extern "C" fn run_test(
         self: &mut Self,
-        test_config: &'static TestConfig,
+        test_config: &TestConfig,
+        callback: extern "C" fn(&TestNotification, *mut std::ffi::c_void) -> (),
+        callback_data: *mut std::ffi::c_void,
     ) -> *mut TestResult {
-        let mut cursor = std::io::Cursor::new(test_config::builtin::OSHA_FAST_FFP.as_bytes());
-        let config = test_config::TestConfig::parse_from_csv(&mut cursor)
-            .expect("builtin configs must parse");
-        assert!(config.validate().is_ok(), "builtin configs must be valid");
-
+        let callback_data = FFICallbackDataHandle(callback_data);
         let test_callback = move |notification: &TestNotification| {
-            test_config.send_notification(notification);
+            callback(&notification, callback_data.get());
         };
         self.device
             .tx_action
             .send(Action::StartTest {
-                config: config,
+                config: test_config.clone(),
                 test_callback: Some(Box::new(test_callback)),
             })
             .expect("device connection is (probably) gone");
