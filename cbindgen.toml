@@ -1,0 +1,4 @@
+# Gory details in https://github.com/rust-lang/rust-bindgen/issues/1671 and
+# https://internals.rust-lang.org/t/pre-rfc-usize-is-not-size-t/15369 . I don't
+# expect anyone to use this library on one of the referenced exotic platforms.
+usize_is_size_t = true
