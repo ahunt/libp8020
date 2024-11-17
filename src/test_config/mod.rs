@@ -48,7 +48,7 @@ pub enum ParseError<'a> {
 impl TestConfig {
     // TODO: add Option<Vec<ConfigWarning>>, and implement warning generation.
     // TODO: make ValidationError more useful.
-    fn validate(self: &Self) -> Result<(), ValidationError> {
+    pub fn validate(self: &Self) -> Result<(), ValidationError> {
         if self.stages.len() < 3 {
             return Err(ValidationError::InvalidConfig);
         }

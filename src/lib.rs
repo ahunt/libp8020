@@ -1,13 +1,19 @@
 extern crate libc;
 extern crate serialport;
 
-use std::io::BufRead;
-use std::str::FromStr;
-
 mod ffi;
 mod protocol;
 mod test;
 pub mod test_config;
+
+use serialport::SerialPortInfo;
+use std::io::BufRead;
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
+use std::thread;
+
+use protocol::{Command, Message};
+use test::{StepOutcome, Test, TestNotification};
 
 enum ValveState {
     Specimen,
@@ -16,113 +22,54 @@ enum ValveState {
     AwaitingSpecimen,
 }
 
-pub struct Device {
-    port: Box<dyn serialport::SerialPort>,
-    reader: std::io::BufReader<Box<dyn serialport::SerialPort>>,
+/// FFI wrapper for Device.
+pub struct P8020Device {
+    device: Device,
+    rx_done: Receiver<()>,
 }
 
-#[repr(C)]
-pub enum TestState {
-    Pending,
-    StartedExercise(usize),
-    Finished,
+// A (C) void* wrapper, which can be (un)safely transmitted across threads.
+struct FFICallbackDataHandle(*mut std::ffi::c_void);
+unsafe impl Send for FFICallbackDataHandle {}
+unsafe impl Sync for FFICallbackDataHandle {}
+
+impl FFICallbackDataHandle {
+    fn get(self: &Self) -> *mut std::ffi::c_void {
+        self.0
+    }
 }
 
-// TODO: figure out if this is really the most FFI-friendly representation. A
-// struct with index+value+enum indicating sample type might be nicer (albeit
-// less rusty, I think).
-#[repr(C)]
-pub enum Sample {
-    AmbientPurge {
-        exercise: usize,
-        index: usize,
-        value: f64,
-    },
-    AmbientSample {
-        exercise: usize,
-        index: usize,
-        value: f64,
-    },
-    SpecimenPurge {
-        exercise: usize,
-        index: usize,
-        value: f64,
-    },
-    SpecimenSample {
-        exercise: usize,
-        index: usize,
-        value: f64,
-    },
-}
-
-#[repr(C)]
-pub enum TestNotification {
-    /// StateChange indicates that the test has changed state, e.g. a new
-    /// exercise was started. Note that just because a given exercise (or
-    /// the entire test) was completed, it is not safe to assume that all
-    /// data for that exercise (or the entire test) is available yet.
-    StateChange(TestState),
-    /// ExerciseResult indicates that the FF for exercise N was M.
-    ExerciseResult(usize, f64),
-    /// RawSample indicates a fresh reading from the PC. It is safe to assume
-    /// that it was delivered 1s (plus/minus the 8020's internal delays) after
-    /// the previous RawReading. This is simply the latest sample, no more,
-    /// no less - i.e. it might be part of the ambient or specimen purge,
-    /// or from the actually sampling period.
-    // TODO: check specs for what the actual allowed range is.
-    // TODO: move this into a new Device-specific callback. Raw samples are
-    // available as soon as we've connected, and I'd like to see raw samples
-    // prior to starting a test, as it allows you to detect if particle levels
-    // in the mask haven't settled yet (I'm not convinced that this is a real
-    // issue, but being able to visualise this data will help verify).
-    RawSample(f64),
-    /// Sample indicates a fresh sample from the 8020. This differs from
-    /// RawSample in that it contains metadata about how this reading is being
-    /// used and where it came from (ambient vs specimen, sample vs purge).
-    /// moreover, this data is only available during a test.
-    Sample(Sample),
-    LiveFF {
-        exercise: usize,
-        index: usize,
-        fit_factor: f64,
-    },
-}
-
-#[repr(C)]
 pub struct TestConfig {
-    // 255 exercises ought to be enough for anyone, but I see no good reason not
-    // to use the platform's native size.
-    exercise_count: usize,
-    // TODO: introduce a way to represent variable exercise setups (along with the
-    // fast protocols).
-    ambient_purge_time: usize,
-    ambient_sample_time: usize,
-    specimen_purge_time: usize,
-    specimen_sample_time: usize,
     test_callback: Option<extern "C" fn(&TestNotification, *mut std::ffi::c_void) -> ()>,
-    test_callback_data: *mut std::ffi::c_void,
+    test_callback_data: FFICallbackDataHandle,
 }
 
 impl TestConfig {
-    /// Returns a new TestConfig with default sample/purge timings. Callers should
-    /// populate any and all callbacks that they require prior to passing the config
-    /// to run_test.
+    /// Returns a new TestConfig.
+    /// This is currently hardcoded to run a specific test protocol (check
+    /// sources to verify), and will be rewritten to allow specifying
+    /// the protocol in due time.
     #[export_name = "test_config_new"]
-    pub extern "C" fn new(exercise_count: usize) -> *mut TestConfig {
+    pub extern "C" fn new(_exercise_count: usize) -> *mut TestConfig {
         Box::leak(Box::new(TestConfig {
-            exercise_count: exercise_count,
-            ambient_purge_time: 4,
-            ambient_sample_time: 5,
-            specimen_purge_time: 11,
-            specimen_sample_time: 40,
             test_callback: Option::None,
-            test_callback_data: 0 as *mut std::ffi::c_void,
+            test_callback_data: FFICallbackDataHandle(0 as *mut std::ffi::c_void),
         }))
+    }
+
+    #[export_name = "test_config_set_callback"]
+    pub extern "C" fn set_callback(
+        self: &mut Self,
+        callback: extern "C" fn(&TestNotification, *mut std::ffi::c_void) -> (),
+        callback_data: *mut std::ffi::c_void,
+    ) {
+        self.test_callback = Some(callback);
+        self.test_callback_data = FFICallbackDataHandle(callback_data);
     }
 
     fn send_notification(self: &Self, notification: &TestNotification) {
         if let Some(callback) = &self.test_callback {
-            callback(&notification, self.test_callback_data);
+            callback(&notification, self.test_callback_data.get());
         }
     }
 
@@ -134,315 +81,59 @@ pub struct TestResult {
     exercise_count: usize,
     fit_factors: *mut f64,
 }
-
 // TODO: add impl TestResult with p8020_test_result_free() for FFI clients.
 
-// TODO: refactor this into something sensible.
-// TODO: introduce proper error handling.
-fn send(port: &mut Box<dyn serialport::SerialPort>, msg: &str) {
-    if !msg.is_ascii() {
-        eprintln!("Unexpected non-ascii msg: {}", msg);
-        // TODO: switch to proper error handling.
-        std::process::exit(0);
-    }
-
-    let mut len_written = port.write(msg.as_bytes()).unwrap();
-    len_written += port.write(&[b'\r']).unwrap();
-    if len_written != (msg.len() + 1) {
-        eprintln!(
-            "Expected to write {} bytes, actually wrote {}.",
-            msg.len() + 1,
-            len_written
-        );
-        std::process::exit(0);
-    }
-}
-
-#[derive(Clone)]
-struct Exercise {
-    ambient_purges_done: usize,
-    ambient_samples: std::vec::Vec<f64>,
-    specimen_switch_received: bool,
-    specimen_purges_done: usize,
-    specimen_samples: std::vec::Vec<f64>,
-}
-
-impl Exercise {
-    fn new(test_config: &TestConfig) -> Exercise {
-        Exercise {
-            ambient_purges_done: 0,
-            ambient_samples: Vec::with_capacity(test_config.ambient_sample_time),
-            specimen_switch_received: false,
-            specimen_purges_done: 0,
-            specimen_samples: Vec::with_capacity(test_config.specimen_sample_time),
-        }
-    }
-}
-
-impl Device {
+impl P8020Device {
     /// Connects to the 8020A at the specified path, and returns a new Device
     /// representing this connection.
     /// Non-rust callers must call device_free to release the returned device.
-    // TODO: add proper error handling (once I've figured out what an
-    // appropriate approach is in conjunction with FFI)
-    // TODO: switch to a builder pattern for params such as baud rate.
-    // Hopefully no one is using other baud rates, but it'd be interesting to
-    // experiment regardless.
-    #[export_name = "device_connect"]
-    pub extern "C" fn connect(path_raw: *const libc::c_char) -> *mut Device {
+    #[export_name = "p8020_device_connect"]
+    pub extern "C" fn connect(path_raw: *const libc::c_char) -> *mut P8020Device {
         let path_cstr = unsafe { std::ffi::CStr::from_ptr(path_raw) };
-        // Get copy-on-write Cow<'_, str>, then guarantee a freshly-owned String allocation
         let path = String::from_utf8_lossy(path_cstr.to_bytes()).to_string();
 
-        // See "PortaCount Plus Model 8020 Technical Addendum" for specs.
-        // Note: baud is configurable on the devices itself, 1200 is the default.
-        let port = serialport::new(path, /* baud_rate */ 1200)
-            .data_bits(serialport::DataBits::Eight)
-            .parity(serialport::Parity::None)
-            .stop_bits(serialport::StopBits::One)
-            .flow_control(serialport::FlowControl::Hardware)
-            .timeout(core::time::Duration::new(15, 0))
-            .open()
-            .expect("Unable to open serial port, sorry");
-
-        let reader = std::io::BufReader::new(port.try_clone().unwrap());
-        Box::leak(Box::new(Device {
-            port: port,
-            reader: reader,
-        }))
+        let (tx_done, rx_done): (Sender<()>, Receiver<()>) = mpsc::channel();
+        let device_callback = move |notification: &DeviceNotification| {
+            if let DeviceNotification::TestCompleted = notification {
+                tx_done.send(()).unwrap();
+            }
+        };
+        match Device::connect_path(path, Some(device_callback)) {
+            Ok(device) => Box::into_raw(Box::new(P8020Device {
+                device: device,
+                rx_done: rx_done,
+            })),
+            Err(_) => std::ptr::null_mut(),
+        }
     }
 
-    /// Run a fit test. This function - and all its callbacks - is/are entirely
-    /// synchronous (see also comment on TestConfig).
-    // TODO: split this into an FFI vs non-FFI version, where only the FFI version has to leak.
-    #[export_name = "device_run_test"]
-    pub extern "C" fn run_test(self: &mut Self, test_config: &TestConfig) -> *mut TestResult {
-        // TODO: rewrite all this. It works, but it's totally inelegant.
+    /// Run a fit test (this API will change a lot soon).
+    #[export_name = "p8020_device_run_test"]
+    pub extern "C" fn run_test(
+        self: &mut Self,
+        test_config: &'static TestConfig,
+    ) -> *mut TestResult {
+        let mut cursor = std::io::Cursor::new(test_config::builtin::OSHA_FAST_FFP.as_bytes());
+        let config = test_config::TestConfig::parse_from_csv(&mut cursor)
+            .expect("builtin configs must parse");
+        assert!(config.validate().is_ok(), "builtin configs must be valid");
 
-        // TODO: do some probing first to determine whether the Portacount is
-        // already in external control mode etc. Ideally we would probe the device
-        // during initial connection.
-        send(&mut self.port, "J"); // Invoke External Control
+        let test_callback = move |notification: &TestNotification| {
+            test_config.send_notification(notification);
+        };
+        self.device
+            .tx_action
+            .send(Action::StartTest {
+                config: config,
+                test_callback: Some(Box::new(test_callback)),
+            })
+            .expect("device connection is (probably) gone");
+        self.rx_done.recv().expect("rx_done failed");
 
-        // Flow control is a bit laggy or broken: sending a second message within
-        // approx 52ms of a previous message will result in the second message being
-        // ignored (which obviously breaks subsequent assumptions).
-        // To be safe I use a 100ms delay. (For my device, the threshold was right
-        // around 52ms, but it may be different for other devices/computers/OS's/
-        // whatever.)
-        // It's also entirely possible that the problem is with my serial/USB adapter.
-        std::thread::sleep(std::time::Duration::from_millis(100));
-
-        send(&mut self.port, "VN"); // Switch valve on
-        std::thread::sleep(std::time::Duration::from_millis(100));
-
-        // Additional exercise is used for the final ambient samples (specimen samples are left empty).
-        let exercises = &mut vec![Exercise::new(&test_config); test_config.exercise_count + 1]
-            .into_boxed_slice();
-        let mut current_exercise = 0;
-
-        // Get rid of any buffered junk - this is possible if the device was already
-        // in external control mode. And skip straight to where we switched to
-        // ambient sampling.
-        for line in (&mut self.reader).lines() {
-            if line.unwrap().trim() == "VN" {
-                break;
-            }
-        }
-
-        send(&mut self.port, "N01"); // Exercise 1
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        send(&mut self.port, "I01000000"); // In progress. Other indicators are also possible, but uninteresting for my use case.
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        send(&mut self.port, "B40"); // Beep
-        std::thread::sleep(std::time::Duration::from_millis(100));
-
-        for line in (&mut self.reader).lines() {
-            let contents = line.unwrap();
-            // BufReader removes the trailing <LR>, we need to remove the remaining <CR>.
-            let message = contents.trim();
-            let current = &mut exercises[current_exercise];
-            match message {
-                // Docs claim this is "VO", I suspect there was a typo (or the firmware was changed/fixed - the Portacount replies VN to VN, so it should reply VF to VF too?
-                "VF" => {
-                    eprintln!(
-                    "Received VF (switched to specimen successfully) after {} purges, {} samples",
-                    current.ambient_purges_done,
-                    current.ambient_samples.len()
-                );
-                    current.specimen_switch_received = true;
-                    // Final (i.e. additional) exercise is used only for ambient sample storage.
-                    if current_exercise == test_config.exercise_count + 1 {
-                        break;
-                    }
-                    continue;
-                }
-                "VN" => {
-                    eprintln!(
-                    "Received VN (switched to ambient successfully) after {} purges, {} samples",
-                    current.specimen_purges_done,
-                    current.specimen_samples.len()
-                );
-                    current_exercise += 1;
-                    // Print after to increment ensure 1-indexed output.
-                    eprintln!(
-                        "Exercise {} done, ambient = {}, specimen = {}",
-                        current_exercise,
-                        current.ambient_samples.iter().sum::<f64>()
-                            / (current.ambient_samples.len() as f64),
-                        current.specimen_samples.iter().sum::<f64>()
-                            / (current.specimen_samples.len() as f64)
-                    );
-                    if current_exercise != test_config.exercise_count {
-                        test_config.send_notification(&TestNotification::StateChange(
-                            TestState::StartedExercise(current_exercise),
-                        ));
-                    }
-
-                    continue;
-                }
-                ref m if m.starts_with("B") => {
-                    // Ignore - the Portacount mirrors these.
-                    continue;
-                }
-                ref m if m.starts_with("N") => {
-                    // Ignore - the Portacount mirrors these.
-                    continue;
-                }
-                ref m if m.starts_with("I") => {
-                    // Ignore - the Portacount mirrors these.
-                    continue;
-                }
-                _ => (),
-            }
-
-            let value = match f64::from_str(message) {
-                Ok(res) => {
-                    test_config.send_notification(&TestNotification::RawSample(res));
-                    res
-                }
-                Err(_) => {
-                    eprintln!("Unexpected message received: {}", message);
-                    continue;
-                }
-            };
-
-            if current.ambient_purges_done < test_config.ambient_purge_time {
-                test_config.send_notification(&TestNotification::Sample(Sample::AmbientPurge {
-                    exercise: current_exercise,
-                    index: current.ambient_purges_done,
-                    value: value,
-                }));
-                current.ambient_purges_done += 1;
-            } else if current.ambient_samples.len() < test_config.ambient_sample_time {
-                current.ambient_samples.push(value);
-                test_config.send_notification(&TestNotification::Sample(Sample::AmbientSample {
-                    exercise: current_exercise,
-                    // Notifying after appending to ambient_samples above forces us to perform
-                    // an ugly subtraction, but avoids the risk of a callback receiver
-                    // inadvertently trying to read a not-yet-existing value from
-                    // ambient_samples. (At this time, clients cannot see ambient_samples, but
-                    // that could change in future.)
-                    index: current.ambient_samples.len() - 1,
-                    value: value,
-                }));
-                if current.ambient_samples.len() == test_config.ambient_sample_time {
-                    send(&mut self.port, "VF"); // Switch valve off
-
-                    // FF calculation
-                    // TODO: extract this.
-                    if current_exercise > 0 {
-                        let ambient_avg = (exercises[current_exercise - 1]
-                            .ambient_samples
-                            .iter()
-                            .sum::<f64>()
-                            + exercises[current_exercise]
-                                .ambient_samples
-                                .iter()
-                                .sum::<f64>())
-                            / ((exercises[current_exercise - 1].ambient_samples.len()
-                                + exercises[current_exercise].ambient_samples.len())
-                                as f64);
-                        let specimen_avg = exercises[current_exercise - 1]
-                            .specimen_samples
-                            .iter()
-                            .sum::<f64>()
-                            / (exercises[current_exercise - 1].specimen_samples.len() as f64);
-                        let fit_factor = ambient_avg / specimen_avg;
-                        println!("Exercise {}: FF {:.1}", current_exercise, fit_factor);
-                        test_config.send_notification(&TestNotification::ExerciseResult(
-                            current_exercise - 1,
-                            fit_factor,
-                        ));
-                    }
-                    if current_exercise == test_config.exercise_count {
-                        break;
-                    }
-                }
-            } else if !current.specimen_switch_received {
-                eprintln!("Received (unexpected) ambient sample after requesting valve switch. That's fine, it just means something was slow.");
-            } else if current.specimen_purges_done < test_config.specimen_purge_time {
-                current.specimen_purges_done += 1;
-                test_config.send_notification(&TestNotification::Sample(Sample::SpecimenPurge {
-                    exercise: current_exercise,
-                    index: current.specimen_purges_done,
-                    value: value,
-                }));
-            } else if current.specimen_samples.len() < test_config.specimen_sample_time {
-                current.specimen_samples.push(value);
-                test_config.send_notification(&TestNotification::Sample(Sample::SpecimenSample {
-                    exercise: current_exercise,
-                    index: current.specimen_samples.len() - 1,
-                    value: value,
-                }));
-
-                // TODO: refactor this out into into its own fn.
-                // This calculation is not cached, because calculating the average of (usually) 5 f64s is NBD.
-                let ambient_avg = current.ambient_samples.iter().sum::<f64>()
-                    / (current.ambient_samples.len() as f64);
-                let fit_factor = ambient_avg / value;
-                test_config.send_notification(&TestNotification::LiveFF {
-                    exercise: current_exercise,
-                    index: current.specimen_samples.len() - 1,
-                    fit_factor: fit_factor,
-                });
-
-                if current.specimen_samples.len() == test_config.specimen_sample_time {
-                    send(&mut self.port, "VN"); // Switch valve on
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                    // current_exercise is incremented later, and we also need to convert from zero to human indexing.
-                    send(
-                        &mut self.port,
-                        format!("N{:02}", current_exercise + 2).as_str(),
-                    ); // Exercise N
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                    send(&mut self.port, "B05"); // Beep
-                }
-            } else {
-                eprintln!("Received (unexpected) specimen sample after requesting valve switch. That's fine, it just means something was slow.");
-            }
-        }
-
-        send(&mut self.port, "G"); // Release from external control
-
-        let mut fit_factors = vec![0.0f64; test_config.exercise_count];
-        for i in 0..test_config.exercise_count {
-            let ambient_avg = (exercises[i].ambient_samples.iter().sum::<f64>()
-                + exercises[i + 1].ambient_samples.iter().sum::<f64>())
-                / ((exercises[i].ambient_samples.len() + exercises[i + 1].ambient_samples.len())
-                    as f64);
-            let specimen_avg = exercises[i].specimen_samples.iter().sum::<f64>()
-                / (exercises[i].specimen_samples.len() as f64);
-            let fit_factor = ambient_avg / specimen_avg;
-            // TODO: 8020A only appears to print decimal for FF < (maybe) 10, should
-            // we do the same here?
-            println!("Exercise {}: FF {:.1}", i, fit_factor);
-            fit_factors[i] = fit_factor;
-        }
-        // TODO: print avg FF.
-
+        // TODO: populate this.
+        let mut fit_factors = vec![0.0f64; 1];
         let ret = Box::leak(Box::new(TestResult {
-            exercise_count: test_config.exercise_count,
+            exercise_count: 1,
             fit_factors: fit_factors.as_mut_ptr(),
         }));
         std::mem::forget(fit_factors);
@@ -455,4 +146,289 @@ impl Device {
             drop(Box::from_raw(self));
         }
     }
+}
+
+#[repr(C)]
+pub enum DeviceNotification {
+    Sample { particles: f64 },
+    TestStarted,
+    TestCompleted,
+    TestCancelled,
+    ConnectionClosed,
+}
+
+pub enum Action {
+    StartTest {
+        config: test_config::TestConfig,
+        test_callback: Option<Box<dyn Fn(&TestNotification) + 'static + std::marker::Send>>,
+    },
+    CancelTest,
+}
+
+pub struct Device {
+    tx_action: Sender<Action>,
+}
+
+impl Device {
+    // TODO: add proper error handling (once I've figured out what an
+    // appropriate approach is in conjunction with FFI)
+    // TODO: switch to a builder pattern for params such as baud rate.
+    // Hopefully no one is using other baud rates, but it'd be interesting to
+    // experiment regardless.
+    fn connect(
+        port_info: SerialPortInfo,
+        device_callback: Option<impl Fn(&DeviceNotification) + 'static + std::marker::Send>,
+    ) -> serialport::Result<Device> {
+        Device::connect_path(port_info.port_name, device_callback)
+    }
+
+    fn connect_path(
+        path: String,
+        // device_callback: Option<fn(&DeviceNotification)>,
+        device_callback: Option<impl Fn(&DeviceNotification) + 'static + std::marker::Send>,
+    ) -> serialport::Result<Device> {
+        // See "PortaCount Plus Model 8020 Technical Addendum" for specs.
+        // Note: baud is configurable on the devices itself, 1200 is the default.
+        let port = serialport::new(path, /* baud_rate */ 1200)
+            .data_bits(serialport::DataBits::Eight)
+            .parity(serialport::Parity::None)
+            .stop_bits(serialport::StopBits::One)
+            .flow_control(serialport::FlowControl::Hardware)
+            // The timeout is relevant for receiver_thread's behaviour (below).
+            .timeout(core::time::Duration::from_millis(100))
+            .open()?;
+
+        // Cloning here is a bit ugly - it's necessary because we want to split reads
+        // and writes, and Serialport implements both in the same object. Read and
+        // writes are mutating, hence an Arc is insufficient. A (rust) Mutex also
+        // doesn't work because reads and writes need to be independent. Writing
+        // some kind of custom wrapper (possibly involving) unsafe might work, but
+        // cloning is good enough.
+        let reader = std::io::BufReader::new(port.try_clone().unwrap());
+
+        // Implementing a test is quite easy - all you need is a big loop (which is
+        // what the prototype did). Most of the complexity stems from handling:
+        // - Cancellation: users may wish to stop a test, so we need some kind of
+        //   messaging or semaphores to indicate cancellation.
+        // - Disconnection: the user may wish to disconnect (independently of the
+        //   test), or the device may disconnect. Handling this gracefully likewise
+        //   adds complexity.
+        // Therefore we end up with a more complex multi-thread implementation. An
+        // async design is probably also feasible, tbc.
+
+        let (tx_action, rx_action): (Sender<Action>, Receiver<Action>) = mpsc::channel();
+        let (tx_command, rx_command): (Sender<Command>, Receiver<Command>) = mpsc::channel();
+        // Option::None is used as a check-alive signal (see details in
+        // start_receiver_thread).
+        let (tx_message, rx_message): (Sender<Option<Message>>, Receiver<Option<Message>>) =
+            mpsc::channel();
+
+        let _device_thread =
+            start_device_thread(rx_action, rx_message, tx_command, device_callback);
+        let _sender_thread = start_sender_thread(port, rx_command);
+        let _receiver_thread = start_receiver_thread(reader, tx_message);
+
+        Ok(Device {
+            tx_action: tx_action,
+        })
+    }
+}
+
+fn start_device_thread(
+    rx_action: Receiver<Action>,
+    rx_message: Receiver<Option<Message>>,
+    tx_command: Sender<Command>,
+    device_callback: Option<impl Fn(&DeviceNotification) + 'static + std::marker::Send>,
+) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        let send_notification = |notification: &DeviceNotification| {
+            if let Some(callback) = &device_callback {
+                callback(notification);
+            }
+        };
+        let send_command = |command: Command| {
+            if let Err(e) = tx_command.send(command) {
+                // Do not send ConnectionClosed here - if the sender has closed,
+                // then we've probably lost the serial connection. In this case
+                // rx_message will also close, and we use that as the canonical
+                // indicator of connection loss. (rx_message is preferred for
+                // this purpose as we poll it frequently, whereas tx is rare.)
+                // Alternatively... the sender thread may have crashed, which
+                // is obviously a disaster.
+                // TODO: consider handling sender thread crashes gracefully too?
+                eprintln!("tx_command failed: {e:?}");
+            }
+        };
+        send_command(Command::EnterExternalControl);
+        // TODO: loop and wait for confirmation of EnterExternalControl.
+
+        let mut test: Option<Test> = None;
+        // TODO: verify whether this is a safe assumption. It may be safer to set
+        // AwaitingSpecimen and request specimen?
+        let mut valve_state = ValveState::Specimen;
+        loop {
+            // The duration is largely arbitrary, and chosen to hopefully
+            // provide sufficient responsiveness.
+            let message = match rx_message.recv_timeout(core::time::Duration::from_millis(50)) {
+                Ok(None) => None,
+                Ok(Some(msg)) => Some(msg),
+                Err(error) => match error {
+                    mpsc::RecvTimeoutError::Timeout => None,
+                    _ => {
+                        send_notification(&DeviceNotification::ConnectionClosed);
+                        return;
+                    }
+                },
+            };
+            if let Some(Message::Sample(value)) = message {
+                send_notification(&DeviceNotification::Sample { particles: value });
+            }
+
+            match rx_action.try_recv() {
+                Ok(action) => match action {
+                    Action::StartTest {
+                        config,
+                        test_callback,
+                    } => {
+                        // Clients could send multiple StartTests (while
+                        // previous tests are still running). That's OK,
+                        // starting a new test is idempotent - and old tests
+                        // will simply be dropped.
+                        test = match Test::create_and_start(
+                            config,
+                            &tx_command,
+                            &mut valve_state,
+                            test_callback,
+                        ) {
+                            Ok(test) => Some(test),
+                            // No need to send ConnectionClosed here - see comment in
+                            // send_command above.
+                            Err(_) => None,
+                        };
+                        send_notification(&DeviceNotification::TestStarted);
+                    }
+                    Action::CancelTest => {
+                        send_command(Command::ClearDisplay);
+                        send_notification(&DeviceNotification::TestCancelled);
+                        valve_state = ValveState::AwaitingSpecimen;
+                        send_command(Command::ValveSpecimen);
+                        test = None;
+                    }
+                },
+                Err(std::sync::mpsc::TryRecvError::Empty) => (),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    send_notification(&DeviceNotification::ConnectionClosed);
+                    return;
+                }
+            }
+
+            let Some(message) = message else {
+                continue;
+            };
+
+            if let Some(new_state) = match message {
+                Message::Response(Command::ValveAmbient) => Some(ValveState::Ambient),
+                Message::Response(Command::ValveSpecimen) => Some(ValveState::Specimen),
+                _ => None,
+            } {
+                valve_state = new_state;
+            }
+            test = match test {
+                None => None,
+                Some(mut test) => match test.step(message, &mut valve_state) {
+                    Ok(StepOutcome::None) => Some(test),
+                    Ok(StepOutcome::TestComplete) => {
+                        send_notification(&DeviceNotification::TestCompleted);
+                        None
+                    }
+                    // No need to send ConnectionClosed here - see comment in
+                    // send_command above.
+                    Err(_) => None,
+                },
+            }
+        }
+    })
+}
+
+fn start_sender_thread(
+    mut writer: Box<dyn serialport::SerialPort>,
+    rx_command: Receiver<Command>,
+) -> thread::JoinHandle<()> {
+    thread::spawn(move || loop {
+        let command = match rx_command.recv().unwrap().to_wire() {
+            Ok(command) => command,
+            Err(e) => {
+                eprintln!("Not sending invalid command: {e:?}");
+                continue;
+            }
+        };
+        assert!(
+            command.is_ascii(),
+            "commands must be ASCII, this is a libp8020 bug (got {command})"
+        );
+
+        writer
+            .write_all(command.as_bytes())
+            .expect("failed to write to port");
+        writer.write_all(&[b'\r']).expect("failed to write to port");
+
+        // Flow control is a bit laggy or broken: sending a second message within
+        // approx 52ms of a previous message will result in the second message being
+        // ignored (which obviously breaks subsequent assumptions).
+        // To be safe I use a 100ms delay. (For my device, the threshold was right
+        // around 52ms, but it may be different for other devices/computers/OS's/
+        // whatever.)
+        // It's also entirely possible that the problem is with my serial/USB adapter.
+        // TODO: figure out if we can wait for the echo instead? This is tricky,
+        // because it relies on accurate response parsing and/or good heuristics?
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    })
+}
+
+fn start_receiver_thread(
+    mut reader: std::io::BufReader<Box<dyn serialport::SerialPort>>,
+    tx_message: Sender<Option<Message>>,
+) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        let mut buf = String::new();
+        loop {
+            // read_line blocks until we get content OR until we reach the timeout (set
+            // above). To detect that the user wishes to close a device connection, we
+            // can check whether the channel is still open: if the connection is closed,
+            // then device thread will close (drop) the channel refered to by tx_message.
+            // The only way to check if the connection is closed is to try send()'ing.
+            // Therefore we periodically send None's to the channel to check if we should
+            // quit. To ensure that we check the connection sufficiently frequently, we
+            // rely on a short timeout on reader.
+            match reader.read_line(&mut buf) {
+                Ok(0) => {
+                    // This closes the channel for us, which in turns lets the
+                    // device thread know that the connection is closed.
+                    return;
+                }
+                Err(error) => match error.kind() {
+                    std::io::ErrorKind::TimedOut => {
+                        // "Is channel still open" check - see long comment above.
+                        tx_message.send(None).unwrap();
+                        continue;
+                    }
+                    _ => {
+                        // See Ok(0) above.
+                        return;
+                    }
+                },
+                Ok(_) => (),
+            };
+            // BufReader removes the trailing <LR>, we need to remove the remaining <CR>.
+            let message = buf.trim();
+            match protocol::parse_message(&message) {
+                Ok(message) => tx_message.send(Some(message)).unwrap(),
+                Err(e) => {
+                    // TODO: log any unparseable messages to disk, to allow for later debugging.
+                    println!("command parsing failed: {e:?}")
+                }
+            }
+            buf.clear();
+        }
+    })
 }
