@@ -317,8 +317,11 @@ impl Test<'_> {
                     index: samples.len(),
                     fit_factor: live_ff,
                 });
-                // TODO: add callback and send interim FF.
-                // let interim_ff = stage_results.avg() / ambient_avg;
+                let interim_ff = stage_results.avg() / ambient_avg;
+                self.send_notification(&TestNotification::InterimFF {
+                    exercise: self.exercises_completed,
+                    fit_factor: interim_ff,
+                });
             }
         }
         if stage_results.is_complete() {
