@@ -11,32 +11,19 @@ pub enum TestState {
     Finished,
 }
 
-// TODO: figure out if this is really the most FFI-friendly representation. A
-// struct with index+value+enum indicating sample type might be nicer (albeit
-// less rusty, I think).
 #[repr(C)]
-// TODO: make this wrap a common struct instead.
-pub enum SampleNotification {
-    AmbientPurge {
-        exercise: usize,
-        index: usize,
-        value: f64,
-    },
-    AmbientSample {
-        exercise: usize,
-        index: usize,
-        value: f64,
-    },
-    SpecimenPurge {
-        exercise: usize,
-        index: usize,
-        value: f64,
-    },
-    SpecimenSample {
-        exercise: usize,
-        index: usize,
-        value: f64,
-    },
+pub enum SampleType {
+    AmbientPurge,
+    AmbientSample,
+    SpecimenPurge,
+    SpecimenSample,
+}
+
+#[repr(C)]
+pub struct SampleData {
+    exercise: usize,
+    value: f64,
+    sample_type: SampleType,
 }
 
 #[derive(Clone)]
@@ -77,7 +64,7 @@ impl StageResults {
         matches!(self, StageResults::Exercise { .. })
     }
 
-    fn append(self: &mut Self, value: f64) {
+    fn append(self: &mut Self, value: f64) -> SampleType {
         match self {
             StageResults::AmbientSample {
                 purges,
@@ -92,8 +79,18 @@ impl StageResults {
                 assert!(purges.len() < config.purge_count || samples.len() < config.sample_count);
                 if purges.len() < config.purge_count {
                     purges.push(value);
+                    if self.is_ambient_sample() {
+                        SampleType::AmbientPurge
+                    } else {
+                        SampleType::SpecimenPurge
+                    }
                 } else {
                     samples.push(value);
+                    if self.is_ambient_sample() {
+                        SampleType::AmbientSample
+                    } else {
+                        SampleType::SpecimenSample
+                    }
                 }
             }
         }
@@ -144,7 +141,7 @@ pub enum TestNotification {
     /// RawSample in that it contains metadata about how this reading is being
     /// used and where it came from (ambient vs specimen, sample vs purge).
     /// moreover, this data is only available during a test.
-    Sample(SampleNotification),
+    Sample(SampleData),
     LiveFF {
         exercise: usize,
         index: usize,
@@ -254,30 +251,31 @@ impl Test<'_> {
     // store_sample stores the sample without doing any further work - callers
     // must ensure to perform any followup changes to the test (e.g. by moving
     // to the next stage).
-    fn store_sample(self: &mut Self, value: f64, valve_state: &mut ValveState) -> bool {
+    fn store_sample(
+        self: &mut Self,
+        value: f64,
+        valve_state: &mut ValveState,
+    ) -> Option<SampleType> {
         let stage_results = self.results.last_mut().unwrap();
         match valve_state {
             ValveState::AwaitingAmbient | ValveState::AwaitingSpecimen => {
                 eprintln!("discarded a sample while awaiting valve switch");
-                false
+                return None;
             }
             ValveState::Ambient => {
                 assert!(
                     stage_results.is_ambient_sample(),
                     "valve state (ambient) does not match test stage (should be AmbientSample)"
                 );
-                stage_results.append(value);
-                true
             }
             ValveState::Specimen => {
                 assert!(
                     stage_results.is_exercise(),
                     "valve state (specimen) does not match test stage (should be Exercise)"
                 );
-                stage_results.append(value);
-                true
             }
         }
+        Some(stage_results.append(value))
     }
 
     fn process_sample(
@@ -290,10 +288,16 @@ impl Test<'_> {
                 && self.results.last().unwrap().is_complete())),
             "process_sample must not be called after test completion"
         );
-        // TODO: send SampleNotifications
-        if !self.store_sample(value, valve_state) {
+
+        let Some(stored_sample_type) = self.store_sample(value, valve_state) else {
             return Ok(StepOutcome::None);
-        }
+        };
+        self.send_notification(&TestNotification::Sample(SampleData {
+            exercise: self.exercises_completed,
+            value: value,
+            sample_type: stored_sample_type,
+        }));
+
         let stage_results = self.results.last().unwrap().clone();
         if let StageResults::Exercise { samples, .. } = &stage_results {
             assert!(self.last_ambient().has_samples(), "should not be executing exercise without at least one completed ambient sample stage");
