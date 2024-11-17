@@ -397,15 +397,17 @@ impl Test<'_> {
 
             if let StageResults::Exercise { .. } = stage_results {
                 self.exercises_completed += 1;
-                self.send_notification(&TestNotification::StateChange(TestState::StartedExercise(
-                    self.exercises_completed,
-                )));
-                let device_exercise = ((self.exercises_completed + 1) % 20) as u8;
-                self.tx_command
-                    .send(Command::DisplayExercise(device_exercise))?;
-                self.tx_command.send(Command::Beep {
-                    duration_deciseconds: 10,
-                })?;
+                if self.results.len() != self.config.stages.len() {
+                    self.send_notification(&TestNotification::StateChange(
+                        TestState::StartedExercise(self.exercises_completed),
+                    ));
+                    let device_exercise = ((self.exercises_completed + 1) % 20) as u8;
+                    self.tx_command
+                        .send(Command::DisplayExercise(device_exercise))?;
+                    self.tx_command.send(Command::Beep {
+                        duration_deciseconds: 10,
+                    })?;
+                }
             }
         }
         Ok(StepOutcome::None)
