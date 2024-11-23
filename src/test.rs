@@ -306,7 +306,24 @@ impl Test<'_> {
         let mut exercise_averages_stack = Vec::new();
         let mut iter = self.results.iter().rev().skip(1);
         while let Some(StageResults::Exercise { samples, .. }) = iter.next() {
-            exercise_averages_stack.push(samples.iter().sum::<f64>() / (samples.len() as f64));
+            // In theory, we might measure 0 particles throughout an exercise,
+            // which would lead to an infinite fit factor. The minimum measurable
+            // number of particles/cm3 is 1/n/1.67 (see Appendix D of the 8020
+            // Operations and Service Manual - p57(digital)/p51(paper) of
+            // https://tsi.com/getmedia/9b578bab-ace5-4820-a414-fb0a78712c67/Model_8020_8028_1980092?ext=.pdf
+            // Using this as a minimum means we would calculate the highest
+            // *measurable* fit-factor (with a lot of handwaving) as opposed
+            // to true fit-factor in this scenario, which is probably the most
+            // reasonable result.
+            // Note: we don't bother applying this logic to the live or interim FFs.
+            // It's feasible, and maybe it should be done?
+            // Note 2: of course all of this is bogus for machines whose
+            // flow-rates are off, or that have other issues.
+            let n = samples.len() as f64;
+            let avg_particle_conc = samples.iter().sum::<f64>() / n;
+            // 8020 flow rate = 100cm3/min
+            let min_particle_conc = 100.0 / 60.0 / n;
+            exercise_averages_stack.push(avg_particle_conc.max(min_particle_conc));
         }
 
         let ambients: Vec<f64> = ambient_samples.collect();
