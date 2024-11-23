@@ -45,6 +45,91 @@ pub enum ParseError<'a> {
     Other(String),
 }
 
+const PARSE_ERROR_MESSAGE_BAD_LEADING_QUOTATION: &str = r#"Quotation marks must occur immediately after token separator ('foo,"bar"' is OK, 'foo, "bar"' and 'foo,b"bar" are not)."#;
+const PARSE_ERROR_MESSAGE_BAD_TRAILING_QUOTATION: &str = r#"Separator must occur immediately after close of quotation marks ('"foo",...' is OK, '"foo" ,...' and '"foo"bar,' are not)"#;
+const PARSE_ERROR_MESSAGE_UNCLOSED_QUOTATION: &str = "All quotations must be closed";
+const PARSE_ERROR_MESSAGE_UNQUOTED_HASH: &str = r##"Raw hash symbols (#) are not allowed inline, enclose the token (cell) in quotes if necessary, e.g. "#ok" or "also #ok""##;
+
+// Reusing an existing CSV parser would be the sensible approach, but... full
+// CSV support simply isn't necessary. (It's not hard to change this decision in
+// future if necessary anyway.)
+fn tokenise_line<'a, 'b>(line: &'a str) -> Result<Vec<String>, ParseError<'b>> {
+    enum LineState {
+        Normal,
+        InQuote,
+    }
+
+    let mut iter = line.chars().peekable();
+    let mut out = Vec::new();
+    out.push(String::new());
+    let mut current_token = out.first_mut().unwrap();
+    let mut state = LineState::Normal;
+    if Some(&'#') == iter.peek() {
+        return Ok(vec![line.to_string()]);
+    }
+    loop {
+        match iter.next() {
+            Some(',') => match state {
+                LineState::Normal => {
+                    out.push(String::new());
+                    current_token = out.last_mut().unwrap();
+                }
+                LineState::InQuote => {
+                    current_token.push(',');
+                }
+            },
+            Some('"') => match state {
+                LineState::Normal => {
+                    if current_token.len() > 0 {
+                        return Err(ParseError::Other(
+                            PARSE_ERROR_MESSAGE_BAD_LEADING_QUOTATION.to_string(),
+                        ));
+                    }
+                    state = LineState::InQuote;
+                }
+                LineState::InQuote => {
+                    let Some(next) = iter.peek() else {
+                        state = LineState::Normal;
+                        break;
+                    };
+                    if *next == '"' {
+                        current_token.push(*next);
+                        iter.next();
+                    } else if *next == ',' {
+                        state = LineState::Normal
+                    } else {
+                        return Err(ParseError::Other(
+                            PARSE_ERROR_MESSAGE_BAD_TRAILING_QUOTATION.to_string(),
+                        ));
+                    }
+                }
+            },
+            Some('#') => match state {
+                LineState::Normal => {
+                    return Err(ParseError::Other(
+                        PARSE_ERROR_MESSAGE_UNQUOTED_HASH.to_string(),
+                    ));
+                }
+                LineState::InQuote => {
+                    current_token.push('#');
+                }
+            },
+            Some(c) => {
+                current_token.push(c);
+            }
+            None => {
+                break;
+            }
+        }
+    }
+    if !matches!(state, LineState::Normal) {
+        return Err(ParseError::Other(
+            PARSE_ERROR_MESSAGE_UNCLOSED_QUOTATION.to_string(),
+        ));
+    }
+    Ok(out)
+}
+
 impl TestConfig {
     // TODO: add Option<Vec<ConfigWarning>>, and implement warning generation.
     // TODO: make ValidationError more useful.
@@ -120,26 +205,9 @@ impl TestConfig {
 
             // Note: any additional columns are ignored for reasons of forward
             // compatibility. However, we do not allow comments in any column.
-            let cols: Vec<&str> = match data
-                .split(',')
-                .map(|col| {
-                    if col.trim().starts_with("#") {
-                        Err(())
-                    } else {
-                        Ok(col)
-                    }
-                })
-                .collect()
-            {
-                Err(_) => {
-                    return Err(ParseError::Other(
-                        "inline comments are prohibited".to_string(),
-                    ))
-                }
-                Ok(res) => res,
-            };
+            let tokens = tokenise_line(data)?;
+            let cols: Vec<&str> = tokens.iter().map(|col| col.as_str()).collect();
 
-            // TODO: support field quoting.
             match cols[0] {
                 "TEST" => {
                     if cols.len() < 3 {
@@ -269,7 +337,7 @@ mod tests {
         assert_eq!(
             result,
             Ok(TestConfig {
-                name: "\"OSHA Fast FFP (Modified Filtering Facepiece protocol)\"".to_string(),
+                name: "OSHA Fast FFP (Modified Filtering Facepiece protocol)".to_string(),
                 short_name: "osha_fast_ffp".to_string(),
                 stages: vec![
                     TestStage::AmbientSample {
@@ -283,28 +351,28 @@ mod tests {
                             purge_count: 11,
                             sample_count: 30,
                         },
-                        name: "\"Bending Over\"".to_string(),
+                        name: "Bending Over".to_string(),
                     },
                     TestStage::Exercise {
                         counts: StageCounts {
                             purge_count: 0,
                             sample_count: 30,
                         },
-                        name: "\"Talking\"".to_string(),
+                        name: "Talking".to_string(),
                     },
                     TestStage::Exercise {
                         counts: StageCounts {
                             purge_count: 0,
                             sample_count: 30,
                         },
-                        name: "\"Head Side-to-Side\"".to_string(),
+                        name: "Head Side-to-Side".to_string(),
                     },
                     TestStage::Exercise {
                         counts: StageCounts {
                             purge_count: 0,
                             sample_count: 30,
                         },
-                        name: "\"Head Up-and-Down\"".to_string(),
+                        name: "Head Up-and-Down".to_string(),
                     },
                     TestStage::AmbientSample {
                         counts: StageCounts {
@@ -525,6 +593,134 @@ mod tests {
         ];
         for case in tests {
             let got = case.input.validate();
+            assert_eq!(
+                got, case.expected_result,
+                "{}: got={got:?}, want={:?}",
+                case.name, case.expected_result
+            );
+        }
+    }
+
+    #[test]
+    fn test_tokenise_line() {
+        struct TestCase<'a> {
+            name: &'a str,
+            input: &'a str,
+            expected_result: Result<Vec<String>, ParseError<'a>>,
+        }
+        let tests = [
+            &TestCase {
+                name: "single_item",
+                input: "abcdef",
+                expected_result: Ok(vec!["abcdef".to_string()]),
+            },
+            &TestCase {
+                name: "two_items",
+                input: "abcdef,hijkl",
+                expected_result: Ok(vec!["abcdef".to_string(), "hijkl".to_string()]),
+            },
+            &TestCase {
+                // This doesn't match RFC4180, but we never promised to adhere
+                // to RFC4180 anyway.
+                name: "two_items_spaces_are_retained",
+                input: " abcdef , hijkl ",
+                expected_result: Ok(vec![" abcdef ".to_string(), " hijkl ".to_string()]),
+            },
+            &TestCase {
+                name: "one_quoted_item",
+                input: r#""abcdef""#,
+                expected_result: Ok(vec!["abcdef".to_string()]),
+            },
+            &TestCase {
+                name: "one_quoted_item_with_separator",
+                input: r#""abc,def""#,
+                expected_result: Ok(vec!["abc,def".to_string()]),
+            },
+            &TestCase {
+                name: "two_quoted_items",
+                input: r#""abcdef","foo""#,
+                expected_result: Ok(vec!["abcdef".to_string(), "foo".to_string()]),
+            },
+            &TestCase {
+                name: "quote_in_one_quoted_item",
+                input: r#""abc""def""#,
+                expected_result: Ok(vec![r#"abc"def"#.to_string()]),
+            },
+            &TestCase {
+                name: "hash_in_one_quoted_item",
+                input: r##""abc#def""##,
+                expected_result: Ok(vec![r##"abc#def"##.to_string()]),
+            },
+            &TestCase {
+                name: "unquoted_hash",
+                input: r##"abc#def"##,
+                expected_result: Err(ParseError::Other(
+                    PARSE_ERROR_MESSAGE_UNQUOTED_HASH.to_string(),
+                )),
+            },
+            &TestCase {
+                name: "unquoted_comment",
+                input: r##"abc,#def"##,
+                expected_result: Err(ParseError::Other(
+                    PARSE_ERROR_MESSAGE_UNQUOTED_HASH.to_string(),
+                )),
+            },
+            &TestCase {
+                name: "many_quotes_in_two_quoted_items",
+                input: r#""abc""de""""f","foo""bar""#,
+                expected_result: Ok(vec![r#"abc"de""f"#.to_string(), r#"foo"bar"#.to_string()]),
+            },
+            &TestCase {
+                name: "bad_leading_quotation",
+                input: r#""abc", "def""#,
+                expected_result: Err(ParseError::Other(
+                    PARSE_ERROR_MESSAGE_BAD_LEADING_QUOTATION.to_string(),
+                )),
+            },
+            &TestCase {
+                name: "bad_leading_quotation_single_item",
+                input: r#" "abc""#,
+                expected_result: Err(ParseError::Other(
+                    PARSE_ERROR_MESSAGE_BAD_LEADING_QUOTATION.to_string(),
+                )),
+            },
+            &TestCase {
+                name: "bad_trailing_quotation",
+                input: r#""abc" ,"def""#,
+                expected_result: Err(ParseError::Other(
+                    PARSE_ERROR_MESSAGE_BAD_TRAILING_QUOTATION.to_string(),
+                )),
+            },
+            &TestCase {
+                name: "bad_trailing_quotation_single_item",
+                input: r#""abc" "#,
+                expected_result: Err(ParseError::Other(
+                    PARSE_ERROR_MESSAGE_BAD_TRAILING_QUOTATION.to_string(),
+                )),
+            },
+            &TestCase {
+                name: "unclosed_quotation",
+                input: r#""abc "#,
+                expected_result: Err(ParseError::Other(
+                    PARSE_ERROR_MESSAGE_UNCLOSED_QUOTATION.to_string(),
+                )),
+            },
+            &TestCase {
+                name: "second_item_unclosed_quotation",
+                input: r#""abc","def"#,
+                expected_result: Err(ParseError::Other(
+                    PARSE_ERROR_MESSAGE_UNCLOSED_QUOTATION.to_string(),
+                )),
+            },
+            &TestCase {
+                name: "comment_line_not_tokenised",
+                input: "#abc,def",
+                expected_result: Ok(vec!["#abc,def".to_string()]),
+            },
+        ];
+        for case in tests {
+            let input = case.input.to_string();
+            let got = tokenise_line(&input);
             assert_eq!(
                 got, case.expected_result,
                 "{}: got={got:?}, want={:?}",
