@@ -310,7 +310,6 @@ fn start_device_thread(
                 valve_state = new_state;
             }
             test = match test {
-                None => None,
                 Some(mut test) => match test.step(message, &mut valve_state) {
                     Ok(StepOutcome::None) => Some(test),
                     Ok(StepOutcome::TestComplete) => {
@@ -321,6 +320,12 @@ fn start_device_thread(
                     // send_command above.
                     Err(_) => None,
                 },
+                None => {
+                    if let Message::Sample(value) = message {
+                        send_command(Command::DisplayConcentration(value));
+                    }
+                    None
+                }
             }
         }
     })
