@@ -136,7 +136,7 @@ pub enum TestNotification {
     /// data for that exercise (or the entire test) is available yet.
     StateChange(TestState),
     /// ExerciseResult indicates that the FF for exercise N was M.
-    ExerciseResult(usize, f64),
+    ExerciseResult(usize, f64, f64),
     /// Sample indicates a fresh sample from the 8020. This differs from
     /// RawSample in that it contains metadata about how this reading is being
     /// used and where it came from (ambient vs specimen, sample vs purge).
@@ -323,17 +323,29 @@ impl Test<'_> {
             let avg_particle_conc = samples.iter().sum::<f64>() / n;
             // 8020 flow rate = 100cm3/min
             let min_particle_conc = 100.0 / 60.0 / n;
-            exercise_averages_stack.push(avg_particle_conc.max(min_particle_conc));
+            let err = 1.0 / f64::sqrt(avg_particle_conc * n * 100.0 / 60.0);
+            exercise_averages_stack.push((avg_particle_conc.max(min_particle_conc), err));
         }
 
         let ambients: Vec<f64> = ambient_samples.collect();
         let ambient_avg = ambients.iter().sum::<f64>() / (ambients.len() as f64);
 
-        while let Some(exercise_avg) = exercise_averages_stack.pop() {
+        while let Some((exercise_avg, exercise_err)) = exercise_averages_stack.pop() {
             let ff = ambient_avg / exercise_avg;
+            eprintln!(
+                "Exercise {}: FF={}±{}",
+                self.exercise_ffs.len(),
+                ff,
+                ff * exercise_err,
+            );
             self.send_notification(&TestNotification::ExerciseResult(
                 self.exercise_ffs.len(),
                 ff,
+                // TODO: fix this approximation - it's reasonable for high FF
+                // where specimen error dominates, but it's still off by almost
+                // 1% for ambient samples at ambient conc of 1000 (which will
+                // influence uncertainty for low FFs).
+                ff * exercise_err,
             ));
             self.exercise_ffs.push(ff);
         }
