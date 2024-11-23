@@ -14,7 +14,6 @@ use std::thread;
 
 use protocol::{Command, Message};
 use test::{StepOutcome, Test, TestNotification};
-use test_config::TestConfig;
 
 enum ValveState {
     Specimen,
@@ -34,7 +33,9 @@ pub enum DeviceNotification {
         particles: f64,
     },
     TestStarted,
-    TestCompleted,
+    TestCompleted {
+        fit_factors: Vec<f64>,
+    },
     TestCancelled,
     ConnectionClosed,
 }
@@ -219,7 +220,9 @@ fn start_device_thread(
                 Some(mut test) => match test.step(message, &mut valve_state) {
                     Ok(StepOutcome::None) => Some(test),
                     Ok(StepOutcome::TestComplete) => {
-                        send_notification(&DeviceNotification::TestCompleted);
+                        send_notification(&DeviceNotification::TestCompleted {
+                            fit_factors: test.exercise_ffs,
+                        });
                         None
                     }
                     // No need to send ConnectionClosed here - see comment in

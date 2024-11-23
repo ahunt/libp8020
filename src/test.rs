@@ -168,7 +168,7 @@ pub struct Test<'a> {
     // Final FFs for each exercise. Caution: for non-periodic protocols, a given
     // exercise's FF might not be calculated until several intermediate
     // exerciseshave completed.
-    exercise_ffs: Vec<f64>,
+    pub exercise_ffs: Vec<f64>,
     // This is NOT the same as exercise_ffs.len(), see above.
     exercises_completed: usize,
     tx_command: &'a Sender<Command>,

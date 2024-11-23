@@ -19,7 +19,9 @@ enum P8020DeviceNotification {
 /// FFI wrapper for Device.
 pub struct P8020Device {
     device: Device,
-    rx_done: Receiver<()>,
+    // Receiver for test completion signal. OK(fit_factors) on successfull
+    // completion, Err(()) on cancellation.
+    rx_done: Receiver<Result<Vec<f64>, ()>>,
 }
 
 // A (C) void* wrapper, which can be (un)safely transmitted across threads.
@@ -34,11 +36,12 @@ impl FFICallbackDataHandle {
 }
 
 #[repr(C)]
-pub struct TestResult {
+pub struct P8020TestResult {
     exercise_count: usize,
     fit_factors: *mut f64,
+    fit_factors_length: usize,
+    fit_factors_capacity: usize,
 }
-// TODO: add impl TestResult with p8020_test_result_free() for FFI clients.
 
 impl P8020Device {
     /// Connects to the 8020A at the specified path, and returns a new Device
@@ -54,7 +57,8 @@ impl P8020Device {
         let path = String::from_utf8_lossy(path_cstr.to_bytes()).to_string();
 
         let callback_data = FFICallbackDataHandle(callback_data);
-        let (tx_done, rx_done): (Sender<()>, Receiver<()>) = mpsc::channel();
+        let (tx_done, rx_done): (Sender<Result<Vec<f64>, ()>>, Receiver<Result<Vec<f64>, ()>>) =
+            mpsc::channel();
         let device_callback = move |notification: &DeviceNotification| {
             if let Some(notification) = match notification {
                 DeviceNotification::Sample { particles } => Some(P8020DeviceNotification::Sample {
@@ -65,12 +69,14 @@ impl P8020Device {
                 }
                 DeviceNotification::TestStarted
                 | DeviceNotification::TestCancelled
-                | DeviceNotification::TestCompleted => None,
+                | DeviceNotification::TestCompleted { .. } => None,
             } {
                 callback(&notification, callback_data.get());
             }
-            if let DeviceNotification::TestCompleted = notification {
-                tx_done.send(()).unwrap();
+            if let DeviceNotification::TestCompleted { fit_factors } = notification {
+                tx_done.send(Ok(fit_factors.clone())).unwrap();
+            } else if let DeviceNotification::TestCancelled = notification {
+                tx_done.send(Err(())).unwrap();
             }
         };
         match Device::connect_path(path, Some(device_callback)) {
@@ -89,7 +95,7 @@ impl P8020Device {
         test_config: &TestConfig,
         callback: extern "C" fn(&TestNotification, *mut std::ffi::c_void) -> (),
         callback_data: *mut std::ffi::c_void,
-    ) -> *mut TestResult {
+    ) -> *mut P8020TestResult {
         let callback_data = FFICallbackDataHandle(callback_data);
         let test_callback = move |notification: &TestNotification| {
             callback(&notification, callback_data.get());
@@ -101,21 +107,45 @@ impl P8020Device {
                 test_callback: Some(Box::new(test_callback)),
             })
             .expect("device connection is (probably) gone");
-        self.rx_done.recv().expect("rx_done failed");
 
-        // TODO: populate this.
-        let mut fit_factors = vec![0.0f64; 1];
-        let ret = Box::leak(Box::new(TestResult {
-            exercise_count: 1,
-            fit_factors: fit_factors.as_mut_ptr(),
-        }));
+        let Ok(mut fit_factors) = self.rx_done.recv().expect("rx_done failed") else {
+            return std::ptr::null_mut();
+        };
+
+        // Could be switched to Vec.into_raw_parts() once it become stable:
+        // https://github.com/rust-lang/rust/issues/65816
+        let (data, length, capacity) = (
+            fit_factors.as_mut_ptr(),
+            fit_factors.len(),
+            fit_factors.capacity(),
+        );
         std::mem::forget(fit_factors);
+        let ret = Box::leak(Box::new(P8020TestResult {
+            exercise_count: 1,
+            fit_factors: data,
+            fit_factors_length: length,
+            fit_factors_capacity: capacity,
+        }));
         ret
     }
 
     #[export_name = "device_free"]
     pub extern "C" fn free(self: &mut Self) {
         unsafe {
+            drop(Box::from_raw(self));
+        }
+    }
+}
+
+impl P8020TestResult {
+    #[export_name = "p8020_test_result_free"]
+    pub extern "C" fn test_result_free(self: &mut Self) {
+        unsafe {
+            let _ = Vec::from_raw_parts(
+                self.fit_factors,
+                self.fit_factors_length,
+                self.fit_factors_capacity,
+            );
             drop(Box::from_raw(self));
         }
     }
