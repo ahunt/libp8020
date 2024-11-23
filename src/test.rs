@@ -122,10 +122,12 @@ impl StageResults {
         match self {
             StageResults::AmbientSample { samples, .. }
             | StageResults::Exercise { samples, .. } => {
-                samples.iter().sum::<f64>() / samples.len() as f64
+                let avg = samples.iter().sum::<f64>() / samples.len() as f64;
+                avg.max(60.0 / 100.0 / (samples.len() as f64))
             }
         }
     }
+
 }
 
 #[repr(C)]
@@ -377,13 +379,13 @@ impl Test<'_> {
             assert!(self.last_ambient().has_samples(), "should not be executing exercise without at least one completed ambient sample stage");
             if stage_results.has_samples() {
                 let ambient_avg = self.last_ambient().avg();
-                let live_ff = ambient_avg / value.max(0.01);
+                let live_ff = ambient_avg / value.max(100.0 / 60.0);
                 self.send_notification(&TestNotification::LiveFF {
                     exercise: self.exercises_completed,
                     index: samples.len(),
                     fit_factor: live_ff,
                 });
-                let interim_ff = ambient_avg / stage_results.avg().max(0.01);
+                let interim_ff = ambient_avg / stage_results.avg();
                 self.send_notification(&TestNotification::InterimFF {
                     exercise: self.exercises_completed,
                     fit_factor: interim_ff,
