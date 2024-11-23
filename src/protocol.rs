@@ -41,6 +41,7 @@ pub enum Command {
     ValveSpecimen,
     // Display exercise number: value must be within 1..=19 when sending.
     DisplayExercise(u8),
+    DisplayConcentration(f64),
     Indicator(Indicator),
     ClearDisplay,
 }
@@ -49,7 +50,7 @@ pub enum Command {
 pub enum InvalidCommandError {
     OutOfRange {
         command: Command,
-        allowed_range: std::ops::Range<u8>,
+        allowed_range: std::ops::Range<usize>,
     },
 }
 
@@ -76,6 +77,23 @@ impl Command {
                     allowed_range: std::ops::Range { start: 0, end: 20 },
                 }),
             },
+            Command::DisplayConcentration(value) => {
+                if *value < 100.0 {
+                    Ok(format!("D{value:09.2}"))
+                } else {
+                    let value = value.round() as usize;
+                    if value > 999_999_999 {
+                        return Err(InvalidCommandError::OutOfRange {
+                            command: self.clone(),
+                            allowed_range: std::ops::Range {
+                                start: 0,
+                                end: 999_999_999,
+                            },
+                        });
+                    }
+                    Ok(format!("D{value:09.0}"))
+                }
+            }
             Command::Indicator(indicator) => {
                 let mut out = String::with_capacity(9);
                 out.push_str("I0");
@@ -159,6 +177,17 @@ fn parse_command(command: &str) -> Result<Command, ParseError> {
                 }),
             }
         }
+        ref command if command.starts_with("D") => {
+            // According to spec, the number will use 9 chars - but but I don't
+            // think there's much harm in being more permissive.
+            match f64::from_str(&command[1..]) {
+                Ok(value) => Ok(Command::DisplayConcentration(value)),
+                Err(_) => Err(ParseError {
+                    received_message: command.to_string(),
+                    reason: "unable to parse display-concentration command".to_string(),
+                }),
+            }
+        }
         ref command if command.starts_with("I") => {
             if command.len() != 9 {
                 return Err(ParseError {
@@ -232,7 +261,6 @@ pub fn parse_message(message: &str) -> Result<Message, ParseError> {
                 }),
             }
         }
-
         ref message if message.starts_with("E") => {
             // TODO: try to parse command recursively.
             Ok(Message::UnknownError(format!(
@@ -365,6 +393,47 @@ mod tests {
                 expected_result: Err(InvalidCommandError::OutOfRange {
                     command: Command::DisplayExercise(20),
                     allowed_range: std::ops::Range { start: 0, end: 20 },
+                }),
+            },
+            TestCase {
+                name: "DisplayConcentration 0.0",
+                input: Command::DisplayConcentration(0.0),
+                expected_result: Ok("D000000.00".to_string()),
+            },
+            TestCase {
+                name: "DisplayConcentration 99.9",
+                input: Command::DisplayConcentration(99.9),
+                expected_result: Ok("D000099.90".to_string()),
+            },
+            TestCase {
+                name: "DisplayConcentration 100.0",
+                input: Command::DisplayConcentration(100.0),
+                expected_result: Ok("D000000100".to_string()),
+            },
+            TestCase {
+                name: "DisplayConcentration 100.4",
+                input: Command::DisplayConcentration(100.4),
+                expected_result: Ok("D000000100".to_string()),
+            },
+            TestCase {
+                name: "DisplayConcentration 100.5",
+                input: Command::DisplayConcentration(100.5),
+                expected_result: Ok("D000000101".to_string()),
+            },
+            TestCase {
+                name: "DisplayConcentration 999_999_999.0",
+                input: Command::DisplayConcentration(999_999_999.0),
+                expected_result: Ok("D999999999".to_string()),
+            },
+            TestCase {
+                name: "DisplayConcentration 1_000_000_000.0",
+                input: Command::DisplayConcentration(1_000_000_000.0),
+                expected_result: Err(InvalidCommandError::OutOfRange {
+                    command: Command::DisplayConcentration(1_000_000_000.0),
+                    allowed_range: std::ops::Range {
+                        start: 0,
+                        end: 999_999_999,
+                    },
                 }),
             },
             TestCase {
@@ -577,6 +646,47 @@ mod tests {
                 input: "NAA",
                 expected_result: Err(ParseError {
                     received_message: "NAA".to_string(),
+                    reason: "".to_string(),
+                }),
+            },
+            TestCase {
+                name: "DisplayConcentration_0.",
+                input: "D00000000.",
+                expected_result: Ok(Message::Response(Command::DisplayConcentration(0.0))),
+            },
+            TestCase {
+                name: "DisplayConcentration_0.0",
+                input: "D0000000.0",
+                expected_result: Ok(Message::Response(Command::DisplayConcentration(0.0))),
+            },
+            TestCase {
+                name: "DisplayConcentration_.000000000",
+                input: "D.00000000",
+                expected_result: Ok(Message::Response(Command::DisplayConcentration(0.0))),
+            },
+            TestCase {
+                name: "DisplayConcentration_1.0",
+                input: "D1.0000000",
+                expected_result: Ok(Message::Response(Command::DisplayConcentration(1.0))),
+            },
+            TestCase {
+                name: "DisplayConcentration_999.99",
+                input: "D000999.99",
+                expected_result: Ok(Message::Response(Command::DisplayConcentration(999.99))),
+            },
+            TestCase {
+                name: "DisplayConcentration_1_000_000_000",
+                // Not part of the spec, but we should be able to handle it...
+                input: "D1000000000",
+                expected_result: Ok(Message::Response(Command::DisplayConcentration(
+                    1_000_000_000.0,
+                ))),
+            },
+            TestCase {
+                name: "DisplayConcentrationGarbage",
+                input: "DAA",
+                expected_result: Err(ParseError {
+                    received_message: "DAA".to_string(),
                     reason: "".to_string(),
                 }),
             },
