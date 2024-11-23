@@ -219,6 +219,7 @@ impl Test<'_> {
                 *valve_state = ValveState::AwaitingAmbient;
             }
         };
+        tx_command.send(Command::ClearDisplay)?;
         tx_command.send(Command::Indicator(Indicator {
             in_progress: true,
             ..Indicator::empty()
