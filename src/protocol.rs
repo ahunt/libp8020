@@ -78,6 +78,9 @@ impl Command {
                 }),
             },
             Command::DisplayConcentration(value) => {
+                // I haven't figured out a way to control segments directly yet
+                // (including 'A' or 'a' as part of this command does not work for example...).
+                // Being able to do so would be nice for indicating the current exercise name.
                 if *value < 100.0 {
                     Ok(format!("D{value:09.2}"))
                 } else {
