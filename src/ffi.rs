@@ -5,10 +5,16 @@ use std::os::raw::c_char;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 
-use crate::{Action,Device,DeviceNotification};
 use crate::test::TestNotification;
-use crate::test_config::TestConfig;
 use crate::test_config::builtin::BUILTIN_CONFIGS;
+use crate::test_config::TestConfig;
+use crate::{Action, Device, DeviceNotification};
+
+#[repr(C)]
+enum P8020DeviceNotification {
+    Sample { particles: f64 },
+    ConnectionClosed,
+}
 
 /// FFI wrapper for Device.
 pub struct P8020Device {
@@ -41,7 +47,7 @@ impl P8020Device {
     #[export_name = "p8020_device_connect"]
     pub extern "C" fn connect(
         path_raw: *const libc::c_char,
-        callback: extern "C" fn(&DeviceNotification, *mut std::ffi::c_void) -> (),
+        callback: extern "C" fn(&P8020DeviceNotification, *mut std::ffi::c_void) -> (),
         callback_data: *mut std::ffi::c_void,
     ) -> *mut P8020Device {
         let path_cstr = unsafe { std::ffi::CStr::from_ptr(path_raw) };
@@ -50,7 +56,19 @@ impl P8020Device {
         let callback_data = FFICallbackDataHandle(callback_data);
         let (tx_done, rx_done): (Sender<()>, Receiver<()>) = mpsc::channel();
         let device_callback = move |notification: &DeviceNotification| {
-            callback(&notification, callback_data.get());
+            if let Some(notification) = match notification {
+                DeviceNotification::Sample { particles } => Some(P8020DeviceNotification::Sample {
+                    particles: *particles,
+                }),
+                DeviceNotification::ConnectionClosed => {
+                    Some(P8020DeviceNotification::ConnectionClosed)
+                }
+                DeviceNotification::TestStarted
+                | DeviceNotification::TestCancelled
+                | DeviceNotification::TestCompleted => None,
+            } {
+                callback(&notification, callback_data.get());
+            }
             if let DeviceNotification::TestCompleted = notification {
                 tx_done.send(()).unwrap();
             }

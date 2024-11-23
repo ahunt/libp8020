@@ -23,7 +23,6 @@ enum ValveState {
     AwaitingSpecimen,
 }
 
-#[repr(C)]
 pub enum DeviceNotification {
     /// Sample indicates a fresh reading from the PC. It is safe to assume
     /// that it was delivered 1s (plus/minus the 8020's internal delays) after
