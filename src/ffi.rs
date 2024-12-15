@@ -3,7 +3,7 @@ extern crate libc;
 use std::ffi::CString;
 use std::os::raw::c_char;
 use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::Receiver;
 
 use crate::test::TestNotification;
 use crate::test_config::builtin::BUILTIN_CONFIGS;
@@ -60,8 +60,7 @@ impl P8020Device {
         let path = String::from_utf8_lossy(path_cstr.to_bytes()).to_string();
 
         let callback_data = FFICallbackDataHandle(callback_data);
-        let (tx_done, rx_done): (Sender<Result<Vec<f64>, ()>>, Receiver<Result<Vec<f64>, ()>>) =
-            mpsc::channel();
+        let (tx_done, rx_done) = mpsc::channel();
         let device_callback = move |notification: &DeviceNotification| {
             if let Some(notification) = match notification {
                 DeviceNotification::Sample { particle_conc } => {
