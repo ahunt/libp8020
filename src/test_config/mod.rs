@@ -53,7 +53,7 @@ const PARSE_ERROR_MESSAGE_UNQUOTED_HASH: &str = r##"Raw hash symbols (#) are not
 // Reusing an existing CSV parser would be the sensible approach, but... full
 // CSV support simply isn't necessary. (It's not hard to change this decision in
 // future if necessary anyway.)
-fn tokenise_line<'a, 'b>(line: &'a str) -> Result<Vec<String>, ParseError<'b>> {
+fn tokenise_line<'a>(line: &str) -> Result<Vec<String>, ParseError<'a>> {
     enum LineState {
         Normal,
         InQuote,
