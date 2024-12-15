@@ -203,11 +203,11 @@ pub struct Test<'a> {
 // to imagine converting this into something device-agnostic with a little spot
 // of tweaking (in conjunction with a CPC-abstraction-layer).
 impl Test<'_> {
-    fn create<'a>(
+    fn create(
         config: TestConfig,
-        tx_command: &'a Sender<Command>,
+        tx_command: &Sender<Command>,
         test_callback: TestCallback,
-    ) -> Test<'a> {
+    ) -> Test {
         let stage_count = config.stages.len();
         assert!(
             stage_count >= 3,
