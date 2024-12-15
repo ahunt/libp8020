@@ -55,7 +55,7 @@ fn send(port: &mut Box<dyn serialport::SerialPort>, msg: &str) {
     }
 
     let mut len_written = port.write(msg.as_bytes()).unwrap();
-    len_written += port.write(&[b'\r']).unwrap();
+    len_written += port.write(b"\r").unwrap();
     if len_written != (msg.len() + 1) {
         eprintln!(
             "Expected to write {} bytes, actually wrote {}.",

@@ -260,7 +260,7 @@ fn start_sender_thread(
         writer
             .write_all(command.as_bytes())
             .expect("failed to write to port");
-        writer.write_all(&[b'\r']).expect("failed to write to port");
+        writer.write_all(b"\r").expect("failed to write to port");
 
         // Flow control is a bit laggy or broken: sending a second message within
         // approx 52ms of a previous message will result in the second message being
