@@ -22,3 +22,6 @@ jobs:
         run: cargo -v build
       - name: Check
         run: cargo -v test
+      - name: Clippy
+        # Does not fail on warnings (only prints).
+        run: cargo clippy
