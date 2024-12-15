@@ -324,8 +324,7 @@ impl Test<'_> {
         });
 
         let mut exercise_averages_stack = Vec::new();
-        let mut iter = self.results.iter().rev().skip(1);
-        while let Some(stage) = iter.next() {
+        for stage in self.results.iter().rev().skip(1) {
             if !matches!(stage, StageResults::Exercise { .. }) {
                 break;
             }
