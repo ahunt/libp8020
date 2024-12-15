@@ -18,7 +18,7 @@ mod tests {
     use crate::test_config::TestConfig;
 
     #[test]
-    fn test_BUILTIN_CONFIGS_load_and_validate() {
+    fn test_builtin_configs_load_and_validate() {
         for config in BUILTIN_CONFIGS {
             let mut cursor = std::io::Cursor::new(config.as_bytes());
             let result = TestConfig::parse_from_csv(&mut cursor);
