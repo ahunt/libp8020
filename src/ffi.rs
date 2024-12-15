@@ -11,15 +11,18 @@ use crate::test_config::TestConfig;
 use crate::{Action, Device, DeviceNotification};
 
 #[repr(C)]
-enum P8020DeviceNotification {
-    Sample { particles: f64 },
+pub enum P8020DeviceNotification {
+    Sample {
+        #[allow(dead_code)] // Used via FFI
+        particles: f64,
+    },
     ConnectionClosed,
 }
 
 /// FFI wrapper for Device.
 pub struct P8020Device {
     device: Device,
-    // Receiver for test completion signal. OK(fit_factors) on successfull
+    // Receiver for test completion signal. OK(fit_factors) on successful
     // completion, Err(()) on cancellation.
     rx_done: Receiver<Result<Vec<f64>, ()>>,
 }
