@@ -30,7 +30,7 @@ pub enum DeviceNotification {
     /// or from the actually sampling period.
     // TODO: check specs for what the actual allowed range is.
     Sample {
-        particles: f64,
+        particle_conc: f64,
     },
     TestStarted,
     TestCompleted {
@@ -164,7 +164,9 @@ fn start_device_thread(
                 },
             };
             if let Some(Message::Sample(value)) = message {
-                send_notification(&DeviceNotification::Sample { particles: value });
+                send_notification(&DeviceNotification::Sample {
+                    particle_conc: value,
+                });
             }
 
             match rx_action.try_recv() {

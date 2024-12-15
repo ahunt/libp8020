@@ -14,7 +14,7 @@ use crate::{Action, Device, DeviceNotification};
 pub enum P8020DeviceNotification {
     Sample {
         #[allow(dead_code)] // Used via FFI
-        particles: f64,
+        particle_conc: f64,
     },
     ConnectionClosed,
 }
@@ -64,9 +64,11 @@ impl P8020Device {
             mpsc::channel();
         let device_callback = move |notification: &DeviceNotification| {
             if let Some(notification) = match notification {
-                DeviceNotification::Sample { particles } => Some(P8020DeviceNotification::Sample {
-                    particles: *particles,
-                }),
+                DeviceNotification::Sample { particle_conc } => {
+                    Some(P8020DeviceNotification::Sample {
+                        particle_conc: *particle_conc,
+                    })
+                }
                 DeviceNotification::ConnectionClosed => {
                     Some(P8020DeviceNotification::ConnectionClosed)
                 }
