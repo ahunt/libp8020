@@ -166,11 +166,11 @@ fn main() {
                 }
                 continue;
             }
-            ref m if m.starts_with("B") => {
+            m if m.starts_with("B") => {
                 // Ignore - the Portacount mirrors these.
                 continue;
             }
-            ref m if m.starts_with("N") => {
+            m if m.starts_with("N") => {
                 // Ignore - the Portacount mirrors these.
                 continue;
             }
