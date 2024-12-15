@@ -58,14 +58,14 @@ impl Device {
     // TODO: switch to a builder pattern for params such as baud rate.
     // Hopefully no one is using other baud rates, but it'd be interesting to
     // experiment regardless.
-    fn connect(
+    pub fn connect(
         port_info: SerialPortInfo,
         device_callback: Option<impl Fn(&DeviceNotification) + 'static + std::marker::Send>,
     ) -> serialport::Result<Device> {
         Device::connect_path(port_info.port_name, device_callback)
     }
 
-    fn connect_path(
+    pub fn connect_path(
         path: String,
         // device_callback: Option<fn(&DeviceNotification)>,
         device_callback: Option<impl Fn(&DeviceNotification) + 'static + std::marker::Send>,
