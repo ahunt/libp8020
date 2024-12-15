@@ -218,13 +218,13 @@ impl Test<'_> {
         let mut results = Vec::with_capacity(stage_count);
         results.push(StageResults::from(&config.stages[0]));
         Test {
-            config: config,
-            test_callback: test_callback,
+            config,
+            test_callback,
             current_stage: 0,
-            results: results,
+            results,
             exercise_ffs: Vec::with_capacity(stage_count),
             exercises_completed: 0,
-            tx_command: tx_command,
+            tx_command,
         }
     }
 
@@ -372,7 +372,7 @@ impl Test<'_> {
         };
         self.send_notification(&TestNotification::Sample(SampleData {
             exercise: self.exercises_completed,
-            value: value,
+            value,
             sample_type: stored_sample_type,
         }));
 

@@ -111,9 +111,7 @@ impl Device {
         let _sender_thread = start_sender_thread(port, rx_command);
         let _receiver_thread = start_receiver_thread(reader, tx_message);
 
-        Ok(Device {
-            tx_action: tx_action,
-        })
+        Ok(Device { tx_action })
     }
 }
 

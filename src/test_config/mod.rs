@@ -298,9 +298,9 @@ impl TestConfig {
 
         let (name, short_name) = test_header.unwrap();
         Ok(TestConfig {
-            name: name,
-            short_name: short_name,
-            stages: stages,
+            name,
+            short_name,
+            stages,
         })
     }
 

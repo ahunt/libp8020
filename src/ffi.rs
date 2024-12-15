@@ -85,10 +85,7 @@ impl P8020Device {
             }
         };
         match Device::connect_path(path, Some(device_callback)) {
-            Ok(device) => Box::into_raw(Box::new(P8020Device {
-                device: device,
-                rx_done: rx_done,
-            })),
+            Ok(device) => Box::into_raw(Box::new(P8020Device { device, rx_done })),
             Err(_) => std::ptr::null_mut(),
         }
     }
