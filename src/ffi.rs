@@ -33,7 +33,7 @@ unsafe impl Send for FFICallbackDataHandle {}
 unsafe impl Sync for FFICallbackDataHandle {}
 
 impl FFICallbackDataHandle {
-    fn get(self: &Self) -> *mut std::ffi::c_void {
+    fn get(&self) -> *mut std::ffi::c_void {
         self.0
     }
 }
@@ -96,7 +96,7 @@ impl P8020Device {
     /// Run a fit test (this API will change a lot soon).
     #[export_name = "p8020_device_run_test"]
     pub extern "C" fn run_test(
-        self: &mut Self,
+        &mut self,
         test_config: &TestConfig,
         callback: extern "C" fn(&TestNotification, *mut std::ffi::c_void) -> (),
         callback_data: *mut std::ffi::c_void,
@@ -135,7 +135,7 @@ impl P8020Device {
     }
 
     #[export_name = "device_free"]
-    pub extern "C" fn free(self: &mut Self) {
+    pub extern "C" fn free(&mut self) {
         unsafe {
             drop(Box::from_raw(self));
         }
@@ -144,7 +144,7 @@ impl P8020Device {
 
 impl P8020TestResult {
     #[export_name = "p8020_test_result_free"]
-    pub extern "C" fn test_result_free(self: &mut Self) {
+    pub extern "C" fn test_result_free(&mut self) {
         unsafe {
             let _ = Vec::from_raw_parts(
                 self.fit_factors,

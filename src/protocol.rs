@@ -55,7 +55,7 @@ pub enum InvalidCommandError {
 }
 
 impl Command {
-    pub fn to_wire(self: &Self) -> Result<String, InvalidCommandError> {
+    pub fn to_wire(&self) -> Result<String, InvalidCommandError> {
         match self {
             Command::EnterExternalControl => Ok("J".to_string()),
             Command::ExitExternalControl => Ok("G".to_string()),

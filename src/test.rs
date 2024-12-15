@@ -56,15 +56,15 @@ impl StageResults {
         }
     }
 
-    pub fn is_ambient_sample(self: &Self) -> bool {
+    pub fn is_ambient_sample(&self) -> bool {
         matches!(self, StageResults::AmbientSample { .. })
     }
 
-    pub fn is_exercise(self: &Self) -> bool {
+    pub fn is_exercise(&self) -> bool {
         matches!(self, StageResults::Exercise { .. })
     }
 
-    fn append(self: &mut Self, value: f64) -> SampleType {
+    fn append(&mut self, value: f64) -> SampleType {
         match self {
             StageResults::AmbientSample {
                 purges,
@@ -96,7 +96,7 @@ impl StageResults {
         }
     }
 
-    fn is_complete(self: &Self) -> bool {
+    fn is_complete(&self) -> bool {
         match self {
             StageResults::AmbientSample {
                 purges,
@@ -111,14 +111,14 @@ impl StageResults {
         }
     }
 
-    fn has_samples(self: &Self) -> bool {
+    fn has_samples(&self) -> bool {
         match self {
             StageResults::AmbientSample { samples, .. }
             | StageResults::Exercise { samples, .. } => samples.len() > 0,
         }
     }
 
-    pub fn avg(self: &Self) -> f64 {
+    pub fn avg(&self) -> f64 {
         match self {
             StageResults::AmbientSample { samples, .. }
             | StageResults::Exercise { samples, .. } => {
@@ -139,7 +139,7 @@ impl StageResults {
         }
     }
 
-    pub fn err(self: &Self) -> f64 {
+    pub fn err(&self) -> f64 {
         let avg = self.avg();
         match self {
             StageResults::AmbientSample { samples, .. }
@@ -257,13 +257,13 @@ impl Test<'_> {
         Ok(test)
     }
 
-    fn send_notification(self: &Self, notification: &TestNotification) {
+    fn send_notification(&self, notification: &TestNotification) {
         if let Some(callback) = &self.test_callback {
             callback(notification);
         }
     }
 
-    fn last_ambient(self: &Self) -> &StageResults {
+    fn last_ambient(&self) -> &StageResults {
         for stage_results in self.results.iter().rev() {
             if let StageResults::AmbientSample { .. } = stage_results {
                 return stage_results;
@@ -275,11 +275,7 @@ impl Test<'_> {
     // store_sample stores the sample without doing any further work - callers
     // must ensure to perform any followup changes to the test (e.g. by moving
     // to the next stage).
-    fn store_sample(
-        self: &mut Self,
-        value: f64,
-        valve_state: &mut ValveState,
-    ) -> Option<SampleType> {
+    fn store_sample(&mut self, value: f64, valve_state: &mut ValveState) -> Option<SampleType> {
         let stage_results = self.results.last_mut().unwrap();
         match valve_state {
             ValveState::AwaitingAmbient | ValveState::AwaitingSpecimen => {
@@ -302,7 +298,7 @@ impl Test<'_> {
         Some(stage_results.append(value))
     }
 
-    fn calculate_ffs(self: &mut Self) {
+    fn calculate_ffs(&mut self) {
         let mut iter = self.results.iter().rev();
         let ambient_samples = loop {
             match iter.next() {
@@ -361,7 +357,7 @@ impl Test<'_> {
     }
 
     fn process_sample(
-        self: &mut Self,
+        &mut self,
         value: f64,
         valve_state: &mut ValveState,
     ) -> Result<StepOutcome, SendError<Command>> {
@@ -452,7 +448,7 @@ impl Test<'_> {
     }
 
     pub fn step(
-        self: &mut Self,
+        &mut self,
         message: Message,
         valve_state: &mut ValveState,
     ) -> Result<StepOutcome, SendError<Command>> {

@@ -15,11 +15,11 @@ pub enum TestStage {
 }
 
 impl TestStage {
-    pub fn is_ambient_sample(self: &Self) -> bool {
+    pub fn is_ambient_sample(&self) -> bool {
         matches!(self, TestStage::AmbientSample { .. })
     }
 
-    pub fn is_exercise(self: &Self) -> bool {
+    pub fn is_exercise(&self) -> bool {
         matches!(self, TestStage::Exercise { .. })
     }
 }
@@ -133,7 +133,7 @@ fn tokenise_line<'a, 'b>(line: &'a str) -> Result<Vec<String>, ParseError<'b>> {
 impl TestConfig {
     // TODO: add Option<Vec<ConfigWarning>>, and implement warning generation.
     // TODO: make ValidationError more useful.
-    pub fn validate(self: &Self) -> Result<(), ValidationError> {
+    pub fn validate(&self) -> Result<(), ValidationError> {
         if self.stages.len() < 3 {
             return Err(ValidationError::InvalidConfig);
         }
@@ -304,14 +304,14 @@ impl TestConfig {
         })
     }
 
-    pub fn exercise_count(self: &Self) -> usize {
+    pub fn exercise_count(&self) -> usize {
         self.stages
             .iter()
             .filter(|stage| stage.is_exercise())
             .count()
     }
 
-    pub fn exercise_names(self: &Self) -> Vec<String> {
+    pub fn exercise_names(&self) -> Vec<String> {
         self.stages
             .iter()
             .filter(|stage| stage.is_exercise())
