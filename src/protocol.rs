@@ -133,8 +133,8 @@ pub enum Message {
 
 #[derive(Debug)]
 pub struct ParseError {
-    received_message: String,
-    reason: String,
+    pub received_message: String,
+    pub reason: String,
 }
 
 impl PartialEq for ParseError {

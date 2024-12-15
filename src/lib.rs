@@ -2,7 +2,7 @@ extern crate libc;
 extern crate serialport;
 
 mod ffi;
-mod protocol;
+pub mod protocol;
 mod test;
 pub mod test_config;
 
