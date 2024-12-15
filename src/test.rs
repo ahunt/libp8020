@@ -114,7 +114,7 @@ impl StageResults {
     fn has_samples(&self) -> bool {
         match self {
             StageResults::AmbientSample { samples, .. }
-            | StageResults::Exercise { samples, .. } => samples.len() > 0,
+            | StageResults::Exercise { samples, .. } => !samples.is_empty(),
         }
     }
 

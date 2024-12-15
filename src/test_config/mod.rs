@@ -80,7 +80,7 @@ fn tokenise_line<'a, 'b>(line: &'a str) -> Result<Vec<String>, ParseError<'b>> {
             },
             Some('"') => match state {
                 LineState::Normal => {
-                    if current_token.len() > 0 {
+                    if !current_token.is_empty() {
                         return Err(ParseError::Other(
                             PARSE_ERROR_MESSAGE_BAD_LEADING_QUOTATION.to_string(),
                         ));
@@ -199,7 +199,7 @@ impl TestConfig {
             };
 
             let data = line.trim();
-            if data.len() == 0 || data.chars().nth(0).unwrap() == '#' {
+            if data.is_empty() || data.chars().nth(0).unwrap() == '#' {
                 continue;
             }
 
@@ -265,7 +265,7 @@ impl TestConfig {
                         return Err(ParseError::InvalidExerciseStage("exercise stage purge count must be an integer between 0 and {u16::MAX}"));
                     };
                     stages.push(TestStage::Exercise {
-                        name: if cols[3].len() > 0 {
+                        name: if !cols[3].is_empty() {
                             cols[3].to_string()
                         } else {
                             "<no name>".to_string()
