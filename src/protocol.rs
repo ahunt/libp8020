@@ -250,7 +250,7 @@ pub fn parse_message(message: &str) -> Result<Message, ParseError> {
         // back here if command parsing fails.
         // TODO: consider checking length too - the specs claim this will always be 9
         // chars long.
-        ref message if matches!(message.chars().next().unwrap_or('x'), '0'..='9') => {
+        ref message if message.chars().next().unwrap_or('x').is_ascii_digit() => {
             match f64::from_str(message) {
                 Ok(sample) => Ok(Message::Sample(sample)),
                 Err(_) => Err(ParseError {
