@@ -100,7 +100,7 @@ impl P8020Device {
     ) -> *mut P8020TestResult {
         let callback_data = FFICallbackDataHandle(callback_data);
         let test_callback = move |notification: &TestNotification| {
-            callback(&notification, callback_data.get());
+            callback(notification, callback_data.get());
         };
         self.device
             .tx_action

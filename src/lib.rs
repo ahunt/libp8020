@@ -311,7 +311,7 @@ fn start_receiver_thread(
             };
             // BufReader removes the trailing <LR>, we need to remove the remaining <CR>.
             let message = buf.trim();
-            match protocol::parse_message(&message) {
+            match protocol::parse_message(message) {
                 Ok(message) => tx_message.send(Some(message)).unwrap(),
                 Err(e) => {
                     // TODO: log any unparseable messages to disk, to allow for later debugging.
