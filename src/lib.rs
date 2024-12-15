@@ -13,7 +13,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 
 use protocol::{Command, Message};
-use test::{StepOutcome, Test, TestNotification};
+use test::{StepOutcome, Test};
 
 enum ValveState {
     Specimen,
@@ -43,7 +43,7 @@ pub enum DeviceNotification {
 pub enum Action {
     StartTest {
         config: test_config::TestConfig,
-        test_callback: Option<Box<dyn Fn(&TestNotification) + 'static + std::marker::Send>>,
+        test_callback: test::TestCallback,
     },
     CancelTest,
 }

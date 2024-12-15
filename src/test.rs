@@ -182,9 +182,11 @@ pub enum StepOutcome {
     None,
 }
 
+pub type TestCallback = Option<Box<dyn Fn(&TestNotification) + 'static + std::marker::Send>>;
+
 pub struct Test<'a> {
     config: TestConfig,
-    test_callback: Option<Box<dyn Fn(&TestNotification) + 'static + std::marker::Send>>,
+    test_callback: TestCallback,
     // TODO: figure out a better way of representing all of this, it's a little confusing.
     current_stage: usize,
     results: Vec<StageResults>,
@@ -204,7 +206,7 @@ impl Test<'_> {
     fn create<'a>(
         config: TestConfig,
         tx_command: &'a Sender<Command>,
-        test_callback: Option<Box<dyn Fn(&TestNotification) + 'static + std::marker::Send>>,
+        test_callback: TestCallback,
     ) -> Test<'a> {
         let stage_count = config.stages.len();
         assert!(
@@ -232,7 +234,7 @@ impl Test<'_> {
         config: TestConfig,
         tx_command: &'a Sender<Command>,
         valve_state: &mut ValveState,
-        test_callback: Option<Box<dyn Fn(&TestNotification) + 'static + std::marker::Send>>,
+        test_callback: TestCallback,
     ) -> Result<Test<'a>, SendError<Command>> {
         let test = Self::create(config, tx_command, test_callback);
         match valve_state {
