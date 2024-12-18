@@ -203,7 +203,9 @@ fn start_device_thread(
                 eprintln!("tx_command failed: {e:?}");
             }
         };
+
         send_command(Command::EnterExternalControl);
+        send_command(Command::RequestSettings);
         // TODO: loop and wait for confirmation of EnterExternalControl.
 
         let mut test: Option<Test> = None;
