@@ -129,6 +129,7 @@ pub enum Message {
     ErrorResponse(Command),
     UnknownError(String),
     Sample(f64),
+    Setting(SettingMessage),
 }
 
 #[derive(Debug)]
@@ -222,6 +223,180 @@ fn parse_command(command: &str) -> Result<Command, ParseError> {
     }
 }
 
+/// Represents one of the responses to "Request Settings" Command ("S").
+/// These settings pertain to tests run directly on the device, i.e. they're
+/// orthogonal to the test configurations being used by libp8020.
+/// Case names match those used in the Technical Addendum (i.e. they do not
+/// follow libp8020 conventions - compare Mask/Specimen, Purge/SamplePurge,
+/// etc.).
+/// Note: the addendum specifies that each value will be within a specific
+/// range. However libp8020 does not actually validate that the device returned
+/// a setting within the specified range.
+#[derive(Debug, PartialEq)]
+pub enum SettingMessage {
+    // Spec: 4..=25
+    AmbientPurgeTime {
+        seconds: usize,
+    },
+    // Spec: 5..=99
+    AmbientSampleTime {
+        seconds: usize,
+    },
+    // Spec: 11..=99
+    MaskSamplePurgeTime {
+        seconds: usize,
+    },
+    // Spec:
+    //   ex: 1..=13 (13 == time when running with 0 exercises aka 8010 mode).
+    //   seconds: 10..=99
+    MaskSampleTime {
+        ex: usize,
+        seconds: usize,
+    },
+    // Spec:
+    //   ex: 1..=12
+    //   fit_factor <= 64_000.
+    FitFactorPassLevel {
+        ex: usize,
+        fit_factor: usize,
+    },
+    /// Might not be a number.
+    SerialNumber(String),
+    RunTimeSinceService {
+        decaminutes: usize,
+    },
+    /// year is modulo 100. We use this format over timestamp or date
+    /// representations as then we have to start worrying about timezones and
+    /// such like.
+    DateLastServiced {
+        month: u8,
+        year: u8,
+    },
+}
+
+fn parse_setting(setting: &str) -> Result<SettingMessage, ParseError> {
+    // Each of these messages is specified to be 9 chars long, with empty spaces
+    // in the middle to suit. And despite that, a lot of messages contain
+    // hardcoded 0s as a prefix to the numeric value. That actually doesn't
+    // matter whatsoever because there's no need to care about indexes when
+    // parsing, but it's certainly rather weird.
+    match setting {
+        setting if setting.starts_with("STPA") => {
+            match usize::from_str(setting.strip_prefix("STPA").unwrap().trim()) {
+                Ok(seconds) => Ok(SettingMessage::AmbientPurgeTime { seconds }),
+                Err(_) => Err(ParseError {
+                    received_message: setting.to_string(),
+                    reason: "unable to parse ambient purge time".to_string(),
+                }),
+            }
+        }
+        command if command.starts_with("STA") => {
+            match usize::from_str(setting.strip_prefix("STA").unwrap().trim()) {
+                Ok(seconds) => Ok(SettingMessage::AmbientSampleTime { seconds }),
+                Err(_) => Err(ParseError {
+                    received_message: setting.to_string(),
+                    reason: "unable to parse ambient sample time".to_string(),
+                }),
+            }
+        }
+        command if command.starts_with("STPM") => {
+            match usize::from_str(setting.strip_prefix("STPM").unwrap().trim()) {
+                Ok(seconds) => Ok(SettingMessage::MaskSamplePurgeTime { seconds }),
+                Err(_) => Err(ParseError {
+                    received_message: setting.to_string(),
+                    reason: "unable to parse mask sample purge time".to_string(),
+                }),
+            }
+        }
+        command if command.starts_with("STM") => {
+            // They really do specify this as STMxx000vv !?
+            // There's probably no point in even trying to handle this, who cares?
+            let value = &setting.strip_prefix("STM").unwrap().trim();
+            match if value.len() > 2 {
+                if let Ok(ex) = usize::from_str(&value[0..2]) {
+                    if let Ok(seconds) = usize::from_str(&value[2..]) {
+                        Some(SettingMessage::MaskSampleTime { ex, seconds })
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            } {
+                Some(mask_purge_time) => Ok(mask_purge_time),
+                None => Err(ParseError {
+                    received_message: setting.to_string(),
+                    reason: "unable to parse mask sample time".to_string(),
+                }),
+            }
+        }
+        command if command.starts_with("SP") => {
+            // Same nonsense as above - "SP xxvvvvv" !?
+            let value = &setting.strip_prefix("SP").unwrap().trim();
+            match if value.len() > 2 {
+                if let Ok(ex) = usize::from_str(&value[0..2]) {
+                    if let Ok(fit_factor) = usize::from_str(&value[2..]) {
+                        Some(SettingMessage::FitFactorPassLevel { ex, fit_factor })
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            } {
+                Some(ffpl) => Ok(ffpl),
+                None => Err(ParseError {
+                    received_message: setting.to_string(),
+                    reason: "unable to parse fit factor pass level".to_string(),
+                }),
+            }
+        }
+        command if command.starts_with("SS") => Ok(SettingMessage::SerialNumber(
+            setting.strip_prefix("SS").unwrap().trim().to_string(),
+        )),
+        command if command.starts_with("SR") => {
+            match usize::from_str(setting.strip_prefix("SR").unwrap().trim()) {
+                Ok(decaminutes) => Ok(SettingMessage::RunTimeSinceService { decaminutes }),
+                Err(_) => Err(ParseError {
+                    received_message: setting.to_string(),
+                    reason: "unable to parse run time since last service".to_string(),
+                }),
+            }
+        }
+        command if command.starts_with("SD") => {
+            match match usize::from_str(setting.strip_prefix("SD").unwrap().trim()) {
+                Ok(n) => {
+                    let year = (n % 100) as u8;
+                    let month = n / 100;
+                    if n > 9999 || month > 12 {
+                        None
+                    } else {
+                        Some(SettingMessage::DateLastServiced {
+                            month: month as u8,
+                            year,
+                        })
+                    }
+                }
+                Err(_) => None,
+            } {
+                Some(dls) => Ok(dls),
+                None => Err(ParseError {
+                    received_message: setting.to_string(),
+                    reason: "unable to parse date last serviced".to_string(),
+                }),
+            }
+        }
+        _ => Err(ParseError {
+            received_message: setting.to_string(),
+            reason: "unknown or unsupported command".to_string(),
+        }),
+    }
+}
+
 /// Parse a message received from the portacount.
 /// Note: this function can return a ParseError for messages that were not
 /// understood. This does not indicate any problem with the device, it merely
@@ -266,6 +441,13 @@ pub fn parse_message(message: &str) -> Result<Message, ParseError> {
                 message
             )))
         }
+        ref message if message.starts_with("S") => match parse_setting(message) {
+            Ok(setting_message) => Ok(Message::Setting(setting_message)),
+            Err(err) => Err(ParseError {
+                received_message: message.to_string(),
+                ..err
+            }),
+        },
         message => match parse_command(message) {
             Ok(command) => Ok(Message::Response(command)),
             Err(err) => Err(ParseError {
@@ -763,6 +945,266 @@ mod tests {
                     pass: true,
                     ..EMPTY_INDICATOR
                 }))),
+            },
+            TestCase {
+                name: "SettingAmbientPurgeTime4",
+                input: "STPA 00004",
+                expected_result: Ok(Message::Setting(SettingMessage::AmbientPurgeTime {
+                    seconds: 4,
+                })),
+            },
+            TestCase {
+                name: "SettingAmbientPurgeTime0",
+                // Not compliant with spec
+                input: "STPA 0",
+                expected_result: Ok(Message::Setting(SettingMessage::AmbientPurgeTime {
+                    seconds: 0,
+                })),
+            },
+            TestCase {
+                name: "SettingAmbientPurgeTime999",
+                // Not compliant with spec
+                input: "STPA 00999",
+                expected_result: Ok(Message::Setting(SettingMessage::AmbientPurgeTime {
+                    seconds: 999,
+                })),
+            },
+            TestCase {
+                name: "SettingAmbientPurgeTimeEmpty",
+                input: "STPA",
+                expected_result: Err(ParseError {
+                    received_message: "STPA".to_string(),
+                    reason: "".to_string(),
+                }),
+            },
+            TestCase {
+                name: "SettingAmbientSampleTime5",
+                input: "STA  00005",
+                expected_result: Ok(Message::Setting(SettingMessage::AmbientSampleTime {
+                    seconds: 5,
+                })),
+            },
+            TestCase {
+                name: "SettingAmbientSampleTime0",
+                // Not compliant with spec
+                input: "STA 0",
+                expected_result: Ok(Message::Setting(SettingMessage::AmbientSampleTime {
+                    seconds: 0,
+                })),
+            },
+            TestCase {
+                name: "SettingAmbientSampleTime999",
+                // Not compliant with spec
+                input: "STA 0999",
+                expected_result: Ok(Message::Setting(SettingMessage::AmbientSampleTime {
+                    seconds: 999,
+                })),
+            },
+            TestCase {
+                name: "SettingAmbientSampleTimeEmpty",
+                input: "STA",
+                expected_result: Err(ParseError {
+                    received_message: "STA".to_string(),
+                    reason: "".to_string(),
+                }),
+            },
+            TestCase {
+                name: "SettingMaskSamplePurgeTime11",
+                input: "STPM 00011",
+                expected_result: Ok(Message::Setting(SettingMessage::MaskSamplePurgeTime {
+                    seconds: 11,
+                })),
+            },
+            TestCase {
+                name: "SettingMaskSamplePurgeTime0",
+                // Not compliant with spec
+                input: "STPM 0",
+                expected_result: Ok(Message::Setting(SettingMessage::MaskSamplePurgeTime {
+                    seconds: 0,
+                })),
+            },
+            TestCase {
+                name: "SettingMaskSamplePurgeTime999",
+                // Not compliant with spec
+                input: "STPM 00999",
+                expected_result: Ok(Message::Setting(SettingMessage::MaskSamplePurgeTime {
+                    seconds: 999,
+                })),
+            },
+            TestCase {
+                name: "SettingMaskSamplePurgeTimeEmpty",
+                input: "STPM",
+                expected_result: Err(ParseError {
+                    received_message: "STPM".to_string(),
+                    reason: "".to_string(),
+                }),
+            },
+            TestCase {
+                name: "SettingMaskSampleTime1_10",
+                input: "STM0100010",
+                expected_result: Ok(Message::Setting(SettingMessage::MaskSampleTime {
+                    ex: 1,
+                    seconds: 10,
+                })),
+            },
+            TestCase {
+                name: "SettingMaskSampleTime0_0",
+                // This is totally out of spec.
+                input: "STM0000000",
+                expected_result: Ok(Message::Setting(SettingMessage::MaskSampleTime {
+                    ex: 0,
+                    seconds: 0,
+                })),
+            },
+            TestCase {
+                name: "SettingMaskSampleTime99_999",
+                // This is also way out of spec.
+                input: "STM9900999",
+                expected_result: Ok(Message::Setting(SettingMessage::MaskSampleTime {
+                    ex: 99,
+                    seconds: 999,
+                })),
+            },
+            TestCase {
+                name: "SettingMaskSampleTimeInvalid11",
+                input: "STM 11",
+                expected_result: Err(ParseError {
+                    received_message: "STM 11".to_string(),
+                    reason: "".to_string(),
+                }),
+            },
+            TestCase {
+                name: "SettingMaskSampleTimeEmpty",
+                input: "STM",
+                expected_result: Err(ParseError {
+                    received_message: "STM".to_string(),
+                    reason: "".to_string(),
+                }),
+            },
+            TestCase {
+                name: "SettingFitFactorPassLevel01_100",
+                input: "SP 0100100",
+                expected_result: Ok(Message::Setting(SettingMessage::FitFactorPassLevel {
+                    ex: 1,
+                    fit_factor: 100,
+                })),
+            },
+            TestCase {
+                name: "SettingFitFactorPassLevel12_64000",
+                input: "SP 1264000",
+                expected_result: Ok(Message::Setting(SettingMessage::FitFactorPassLevel {
+                    ex: 12,
+                    fit_factor: 64_000,
+                })),
+            },
+            TestCase {
+                name: "SettingFitFactorPassLevel000",
+                // Out of spec
+                input: "SP 000",
+                expected_result: Ok(Message::Setting(SettingMessage::FitFactorPassLevel {
+                    ex: 0,
+                    fit_factor: 0,
+                })),
+            },
+            TestCase {
+                name: "SettingFitFactorPassLevelInvalid12",
+                input: "SP 12",
+                expected_result: Err(ParseError {
+                    received_message: "SP 12".to_string(),
+                    reason: "".to_string(),
+                }),
+            },
+            TestCase {
+                name: "SettingFitFactorPassLevelEmpty",
+                input: "SP",
+                expected_result: Err(ParseError {
+                    received_message: "SP".to_string(),
+                    reason: "".to_string(),
+                }),
+            },
+            TestCase {
+                name: "SettingSerial00000",
+                input: "SS   00000",
+                expected_result: Ok(Message::Setting(SettingMessage::SerialNumber(
+                    "00000".to_string(),
+                ))),
+            },
+            TestCase {
+                name: "SettingSerialFooBa",
+                input: "SS   FooBa",
+                expected_result: Ok(Message::Setting(SettingMessage::SerialNumber(
+                    "FooBa".to_string(),
+                ))),
+            },
+            TestCase {
+                name: "SettingSerialFooBarBaz",
+                // Out of spec
+                input: "SSFooBarBaz",
+                expected_result: Ok(Message::Setting(SettingMessage::SerialNumber(
+                    "FooBarBaz".to_string(),
+                ))),
+            },
+            TestCase {
+                name: "SettingSerialEmpty",
+                input: "SS",
+                // Opinions may reasonably differ.
+                expected_result: Ok(Message::Setting(SettingMessage::SerialNumber(
+                    "".to_string(),
+                ))),
+            },
+            TestCase {
+                name: "SettingRunTimeSinceLastServiced0",
+                input: "SR   00000",
+                expected_result: Ok(Message::Setting(SettingMessage::RunTimeSinceService {
+                    decaminutes: 0,
+                })),
+            },
+            TestCase {
+                name: "SettingRunTimeSinceLastServiced100",
+                input: "SR   00100",
+                expected_result: Ok(Message::Setting(SettingMessage::RunTimeSinceService {
+                    decaminutes: 100,
+                })),
+            },
+            TestCase {
+                name: "SettingRunTimeSinceLastServiced987123",
+                // Out of spec
+                input: "SR987123",
+                expected_result: Ok(Message::Setting(SettingMessage::RunTimeSinceService {
+                    decaminutes: 987123,
+                })),
+            },
+            TestCase {
+                name: "SettingDateLastServiced_12_24",
+                input: "SD   01224",
+                expected_result: Ok(Message::Setting(SettingMessage::DateLastServiced {
+                    month: 12,
+                    year: 24,
+                })),
+            },
+            TestCase {
+                name: "SettingDateLastServiced_01_99",
+                input: "SD   00199",
+                expected_result: Ok(Message::Setting(SettingMessage::DateLastServiced {
+                    month: 01,
+                    year: 99,
+                })),
+            },
+            TestCase {
+                name: "SettingDateLastServiced99999",
+                input: "SD   99999",
+                expected_result: Err(ParseError {
+                    received_message: "SD   99999".to_string(),
+                    reason: "".to_string(),
+                }),
+            },
+            TestCase {
+                name: "SettingDateLastServicedEmpty",
+                input: "SD",
+                expected_result: Err(ParseError {
+                    received_message: "SD".to_string(),
+                    reason: "".to_string(),
+                }),
             },
         ];
         for case in tests {

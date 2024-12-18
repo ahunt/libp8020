@@ -477,6 +477,8 @@ impl Test<'_> {
             Message::UnknownError(response) => {
                 eprintln!("ignoring unknown error: {response}");
             }
+            // These are already handled by the device_thread. They're irrelevant for a test.
+            Message::Setting(_) => (),
         }
         Ok(StepOutcome::None)
     }
