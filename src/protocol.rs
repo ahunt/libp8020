@@ -44,6 +44,7 @@ pub enum Command {
     DisplayConcentration(f64),
     Indicator(Indicator),
     ClearDisplay,
+    RequestSettings,
 }
 
 #[derive(Debug, PartialEq)]
@@ -110,6 +111,7 @@ impl Command {
                 Ok(out)
             }
             Command::ClearDisplay => Ok("K".to_string()),
+            Command::RequestSettings => Ok("S".to_string()),
         }
     }
 }
@@ -712,6 +714,11 @@ mod tests {
                 name: "ClearDisplay",
                 input: Command::ClearDisplay,
                 expected_result: Ok("K".to_string()),
+            },
+            TestCase {
+                name: "RequestSettings",
+                input: Command::RequestSettings,
+                expected_result: Ok("S".to_string()),
             },
         ];
         for case in tests {
