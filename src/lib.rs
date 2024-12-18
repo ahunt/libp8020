@@ -12,7 +12,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 
-use protocol::{Command, Message};
+use protocol::{Command, Message, SettingMessage};
 use test::{StepOutcome, Test};
 
 enum ValveState {
@@ -38,6 +38,12 @@ pub enum DeviceNotification {
     },
     TestCancelled,
     ConnectionClosed,
+    DeviceProperties {
+        serial_number: String,
+        run_time_since_last_service_hours: f64,
+        last_service_month: u8,
+        last_service_year: u16,
+    },
 }
 
 pub enum Action {
@@ -115,6 +121,63 @@ impl Device {
     }
 }
 
+struct DevicePropertiesCollector {
+    serial_number: Option<String>,
+    run_time_since_last_service_hours: Option<f64>,
+    last_service_month: Option<u8>,
+    last_service_year: Option<u16>,
+}
+
+impl DevicePropertiesCollector {
+    fn new() -> DevicePropertiesCollector {
+        DevicePropertiesCollector {
+            serial_number: None,
+            run_time_since_last_service_hours: None,
+            last_service_month: None,
+            last_service_year: None,
+        }
+    }
+
+    fn process(&mut self, setting: SettingMessage) -> Option<DeviceNotification> {
+        match setting {
+            SettingMessage::SerialNumber(serial_number) => {
+                self.serial_number = Some(serial_number);
+            }
+            SettingMessage::RunTimeSinceService { decaminutes } => {
+                self.run_time_since_last_service_hours = Some(decaminutes as f64 * 10.0 / 60.0);
+            }
+            SettingMessage::DateLastServiced { month, year } => {
+                self.last_service_month = Some(month);
+                self.last_service_year = Some(match year {
+                    // For 8020As, the last known service would be around 2014
+                    // (give or take non-TSI service?). But we have no idea
+                    // how long 8020Ms might still be serviced (although we
+                    // don't yet know if they offer similar setting extraction
+                    // anyway).
+                    year if year < 80 => 2000 + year as u16,
+                    year => 1900 + year as u16,
+                });
+            }
+            _ => (),
+        }
+
+        if self.serial_number.is_some()
+            && self.run_time_since_last_service_hours.is_some()
+            && self.last_service_month.is_some()
+            && self.last_service_year.is_some()
+        {
+            Some(DeviceNotification::DeviceProperties {
+                serial_number: self.serial_number.take().unwrap(),
+                run_time_since_last_service_hours: self.run_time_since_last_service_hours.unwrap(),
+                last_service_month: self.last_service_month.unwrap(),
+                last_service_year: self.last_service_year.unwrap(),
+            })
+        } else {
+            None
+        }
+    }
+}
+
 fn start_device_thread(
     rx_action: Receiver<Action>,
     rx_message: Receiver<Option<Message>>,
@@ -147,6 +210,7 @@ fn start_device_thread(
         // TODO: verify whether this is a safe assumption. It may be safer to set
         // AwaitingSpecimen and request specimen?
         let mut valve_state = ValveState::Specimen;
+        let mut device_properties_collector = DevicePropertiesCollector::new();
         loop {
             // The duration is largely arbitrary, and chosen to hopefully
             // provide sufficient responsiveness.
@@ -208,6 +272,13 @@ fn start_device_thread(
             let Some(message) = message else {
                 continue;
             };
+
+            if let Message::Setting(setting) = message {
+                if let Some(notification) = device_properties_collector.process(setting) {
+                    send_notification(&notification);
+                }
+                continue;
+            }
 
             if let Some(new_state) = match message {
                 Message::Response(Command::ValveAmbient) => Some(ValveState::Ambient),

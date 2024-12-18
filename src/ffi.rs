@@ -71,6 +71,10 @@ impl P8020Device {
                 DeviceNotification::ConnectionClosed => {
                     Some(P8020DeviceNotification::ConnectionClosed)
                 }
+                DeviceNotification::DeviceProperties { .. } => {
+                    // TODO: implement DeviceProperties FFI handling.
+                    None
+                }
                 DeviceNotification::TestStarted
                 | DeviceNotification::TestCancelled
                 | DeviceNotification::TestCompleted { .. } => None,
