@@ -157,7 +157,7 @@ impl P8020Device {
             fit_factors.capacity(),
         );
         std::mem::forget(fit_factors);
-        Box::leak(Box::new(P8020TestResult {
+        Box::into_raw(Box::new(P8020TestResult {
             exercise_count: 1,
             fit_factors: data,
             fit_factors_length: length,
@@ -176,7 +176,7 @@ impl P8020Device {
         let serial_number = CString::new(device_properties.serial_number.clone())
             .expect("serial number should never contain NULLs")
             .into_raw();
-        Box::leak(Box::new(P8020DeviceProperties {
+        Box::into_raw(Box::new(P8020DeviceProperties {
             serial_number,
             run_time_since_last_service_hours: device_properties.run_time_since_last_service_hours,
             last_service_month: device_properties.last_service_month,
