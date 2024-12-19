@@ -69,15 +69,14 @@ impl Device {
     // experiment regardless.
     pub fn connect(
         port_info: SerialPortInfo,
-        device_callback: Option<impl Fn(&DeviceNotification) + 'static + std::marker::Send>,
+        device_callback: Option<impl Fn(DeviceNotification) + 'static + std::marker::Send>,
     ) -> serialport::Result<Device> {
         Device::connect_path(port_info.port_name, device_callback)
     }
 
     pub fn connect_path(
         path: String,
-        // device_callback: Option<fn(&DeviceNotification)>,
-        device_callback: Option<impl Fn(&DeviceNotification) + 'static + std::marker::Send>,
+        device_callback: Option<impl Fn(DeviceNotification) + 'static + std::marker::Send>,
     ) -> serialport::Result<Device> {
         // See "PortaCount Plus Model 8020 Technical Addendum" for specs.
         // Note: baud is configurable on the devices itself, 1200 is the default.
@@ -185,10 +184,10 @@ fn start_device_thread(
     rx_action: Receiver<Action>,
     rx_message: Receiver<Option<Message>>,
     tx_command: Sender<Command>,
-    device_callback: Option<impl Fn(&DeviceNotification) + 'static + std::marker::Send>,
+    device_callback: Option<impl Fn(DeviceNotification) + 'static + std::marker::Send>,
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
-        let send_notification = |notification: &DeviceNotification| {
+        let send_notification = |notification: DeviceNotification| {
             if let Some(callback) = &device_callback {
                 callback(notification);
             }
@@ -225,13 +224,13 @@ fn start_device_thread(
                 Err(error) => match error {
                     mpsc::RecvTimeoutError::Timeout => None,
                     _ => {
-                        send_notification(&DeviceNotification::ConnectionClosed);
+                        send_notification(DeviceNotification::ConnectionClosed);
                         return;
                     }
                 },
             };
             if let Some(Message::Sample(value)) = message {
-                send_notification(&DeviceNotification::Sample {
+                send_notification(DeviceNotification::Sample {
                     particle_conc: value,
                 });
             }
@@ -257,11 +256,11 @@ fn start_device_thread(
                             // send_command above.
                             Err(_) => None,
                         };
-                        send_notification(&DeviceNotification::TestStarted);
+                        send_notification(DeviceNotification::TestStarted);
                     }
                     Action::CancelTest => {
                         send_command(Command::ClearDisplay);
-                        send_notification(&DeviceNotification::TestCancelled);
+                        send_notification(DeviceNotification::TestCancelled);
                         valve_state = ValveState::AwaitingSpecimen;
                         send_command(Command::ValveSpecimen);
                         test = None;
@@ -269,7 +268,7 @@ fn start_device_thread(
                 },
                 Err(std::sync::mpsc::TryRecvError::Empty) => (),
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    send_notification(&DeviceNotification::ConnectionClosed);
+                    send_notification(DeviceNotification::ConnectionClosed);
                     return;
                 }
             }
@@ -280,7 +279,7 @@ fn start_device_thread(
 
             if let Message::Setting(setting) = message {
                 if let Some(notification) = device_properties_collector.process(setting) {
-                    send_notification(&notification);
+                    send_notification(notification);
                 }
                 continue;
             }
@@ -296,7 +295,7 @@ fn start_device_thread(
                 Some(mut test) => match test.step(message, &mut valve_state) {
                     Ok(StepOutcome::None) => Some(test),
                     Ok(StepOutcome::TestComplete) => {
-                        send_notification(&DeviceNotification::TestCompleted {
+                        send_notification(DeviceNotification::TestCompleted {
                             fit_factors: test.exercise_ffs,
                         });
                         None

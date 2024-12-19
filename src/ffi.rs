@@ -88,30 +88,31 @@ impl P8020Device {
         // rustier way to do this.
         let device_properties = Arc::new(Mutex::new(None));
         let device_properties_write = device_properties.clone();
-        let device_callback = move |notification: &DeviceNotification| {
-            if let Some(notification) = match notification {
-                DeviceNotification::Sample { particle_conc } => {
-                    Some(P8020DeviceNotification::Sample {
-                        particle_conc: *particle_conc,
-                    })
-                }
+        let device_callback = move |notification: DeviceNotification| {
+            let (notification, test_result) = match notification {
+                DeviceNotification::Sample { particle_conc } => (
+                    Some(P8020DeviceNotification::Sample { particle_conc }),
+                    None,
+                ),
                 DeviceNotification::ConnectionClosed => {
-                    Some(P8020DeviceNotification::ConnectionClosed)
+                    (Some(P8020DeviceNotification::ConnectionClosed), None)
                 }
                 DeviceNotification::DeviceProperties(updated_properties) => {
-                    *device_properties_write.lock().unwrap() = Some(updated_properties.clone());
-                    Some(P8020DeviceNotification::DevicePropertiesAvailable)
+                    *device_properties_write.lock().unwrap() = Some(updated_properties);
+                    (
+                        Some(P8020DeviceNotification::DevicePropertiesAvailable),
+                        None,
+                    )
                 }
-                DeviceNotification::TestStarted
-                | DeviceNotification::TestCancelled
-                | DeviceNotification::TestCompleted { .. } => None,
-            } {
+                DeviceNotification::TestStarted => (None, None),
+                DeviceNotification::TestCompleted { fit_factors } => (None, Some(Ok(fit_factors))),
+                DeviceNotification::TestCancelled => (None, Some(Err(()))),
+            };
+            if let Some(notification) = notification {
                 callback(&notification, callback_data.get());
             }
-            if let DeviceNotification::TestCompleted { fit_factors } = notification {
-                tx_done.send(Ok(fit_factors.clone())).unwrap();
-            } else if let DeviceNotification::TestCancelled = notification {
-                tx_done.send(Err(())).unwrap();
+            if let Some(test_result) = test_result {
+                tx_done.send(test_result).unwrap();
             }
         };
         match Device::connect_path(path, Some(device_callback)) {
