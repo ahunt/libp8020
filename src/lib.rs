@@ -22,6 +22,7 @@ enum ValveState {
     AwaitingSpecimen,
 }
 
+#[derive(Clone)]
 pub struct DeviceProperties {
     pub serial_number: String,
     pub run_time_since_last_service_hours: f64,

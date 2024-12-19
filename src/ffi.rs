@@ -4,11 +4,12 @@ use std::ffi::CString;
 use std::os::raw::c_char;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex};
 
 use crate::test::TestNotification;
 use crate::test_config::builtin::BUILTIN_CONFIGS;
 use crate::test_config::TestConfig;
-use crate::{Action, Device, DeviceNotification};
+use crate::{Action, Device, DeviceNotification, DeviceProperties};
 
 #[repr(C)]
 pub enum P8020DeviceNotification {
@@ -17,6 +18,9 @@ pub enum P8020DeviceNotification {
         particle_conc: f64,
     },
     ConnectionClosed,
+    // Indicates that device properties can now be retrieved via
+    // p8020_device_get_properties.
+    DevicePropertiesAvailable,
 }
 
 /// FFI wrapper for Device.
@@ -25,6 +29,24 @@ pub struct P8020Device {
     // Receiver for test completion signal. OK(fit_factors) on successful
     // completion, Err(()) on cancellation.
     rx_done: Receiver<Result<Vec<f64>, ()>>,
+    device_properties: Arc<Mutex<Option<DeviceProperties>>>,
+}
+
+#[allow(dead_code)] // All fields read via FFI
+pub struct P8020DeviceProperties {
+    pub serial_number: *const libc::c_char,
+    pub run_time_since_last_service_hours: f64,
+    pub last_service_month: u8,
+    pub last_service_year: u16,
+}
+
+impl P8020DeviceProperties {
+    #[export_name = "p8020_device_properties_free"]
+    pub extern "C" fn free(&mut self) {
+        unsafe {
+            drop(Box::from_raw(self));
+        }
+    }
 }
 
 // A (C) void* wrapper, which can be (un)safely transmitted across threads.
@@ -61,6 +83,11 @@ impl P8020Device {
 
         let callback_data = FFICallbackDataHandle(callback_data);
         let (tx_done, rx_done) = mpsc::channel();
+        // Use an Arc<Mutex> to share device_properties from our closure to
+        // P8020Device. This is extremely inelegant, and I wonder if there's a
+        // rustier way to do this.
+        let device_properties = Arc::new(Mutex::new(None));
+        let device_properties_write = device_properties.clone();
         let device_callback = move |notification: &DeviceNotification| {
             if let Some(notification) = match notification {
                 DeviceNotification::Sample { particle_conc } => {
@@ -71,9 +98,9 @@ impl P8020Device {
                 DeviceNotification::ConnectionClosed => {
                     Some(P8020DeviceNotification::ConnectionClosed)
                 }
-                DeviceNotification::DeviceProperties { .. } => {
-                    // TODO: implement DeviceProperties FFI handling.
-                    None
+                DeviceNotification::DeviceProperties(updated_properties) => {
+                    *device_properties_write.lock().unwrap() = Some(updated_properties.clone());
+                    Some(P8020DeviceNotification::DevicePropertiesAvailable)
                 }
                 DeviceNotification::TestStarted
                 | DeviceNotification::TestCancelled
@@ -88,7 +115,11 @@ impl P8020Device {
             }
         };
         match Device::connect_path(path, Some(device_callback)) {
-            Ok(device) => Box::into_raw(Box::new(P8020Device { device, rx_done })),
+            Ok(device) => Box::into_raw(Box::new(P8020Device {
+                device,
+                rx_done,
+                device_properties,
+            })),
             Err(_) => std::ptr::null_mut(),
         }
     }
@@ -132,6 +163,25 @@ impl P8020Device {
             fit_factors_capacity: capacity,
         }));
         ret
+    }
+
+    /// Returns cached deviced properties, or NULL if not available yet. No data
+    /// will be available until P8020DeviceNotification::DevicePropertiesAvailable
+    /// has been sent.
+    #[export_name = "p8020_device_get_properties"]
+    pub extern "C" fn get_properties(&self) -> *mut P8020DeviceProperties {
+        let Some(ref device_properties) = *self.device_properties.lock().unwrap() else {
+            return std::ptr::null_mut();
+        };
+        let serial_number = CString::new(device_properties.serial_number.clone())
+            .expect("serial number should never contain NULLs")
+            .into_raw();
+        Box::leak(Box::new(P8020DeviceProperties {
+            serial_number,
+            run_time_since_last_service_hours: device_properties.run_time_since_last_service_hours,
+            last_service_month: device_properties.last_service_month,
+            last_service_year: device_properties.last_service_year,
+        }))
     }
 
     #[export_name = "device_free"]
