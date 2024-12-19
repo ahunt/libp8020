@@ -358,6 +358,9 @@ fn parse_setting(setting: &str) -> Result<SettingMessage, ParseError> {
             }
         }
         command if command.starts_with("SS") => Ok(SettingMessage::SerialNumber(
+            // The Technical addendum claims that this is "SS   vvvvv" (3 spaces
+            // is seemingly guaranteed). In reality, the serial number can be longer
+            // than 5 chars - my 8020A returns 8024XXXX.
             setting.strip_prefix("SS").unwrap().trim().to_string(),
         )),
         command if command.starts_with("SR") => {

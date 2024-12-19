@@ -22,8 +22,10 @@ To simply observe the portacount's serial output, invoke:
 
 (Based on working with my 8020A, YMMV.)
 
-* Switch valve off response (Technical Addendum P. 14): my 8020A responds with
+* Switch valve off response (Technical Addendum p. 14): my 8020A responds with
   "VF" (which matches the command to switch valve off) instead of "VO". (By
   comparison, both the switch valve on command and response - in the addendum
   and in reality - are "VN".)
-
+* Serial numbers can be > 5 chars (Technical Addendum p. 16 shows "SS   vvvvv"
+  with an emphasis on three spaces, but specifying niether the length of the
+  serial number, nor permitted chars).
