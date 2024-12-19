@@ -183,7 +183,7 @@ impl P8020Device {
         }))
     }
 
-    #[export_name = "device_free"]
+    #[export_name = "p8020_device_free"]
     pub extern "C" fn free(&mut self) {
         unsafe {
             drop(Box::from_raw(self));
