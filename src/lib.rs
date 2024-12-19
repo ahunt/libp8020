@@ -22,6 +22,13 @@ enum ValveState {
     AwaitingSpecimen,
 }
 
+pub struct DeviceProperties {
+    pub serial_number: String,
+    pub run_time_since_last_service_hours: f64,
+    pub last_service_month: u8,
+    pub last_service_year: u16,
+}
+
 pub enum DeviceNotification {
     /// Sample indicates a fresh reading from the PC. It is safe to assume
     /// that it was delivered 1s (plus/minus the 8020's internal delays) after
@@ -38,12 +45,7 @@ pub enum DeviceNotification {
     },
     TestCancelled,
     ConnectionClosed,
-    DeviceProperties {
-        serial_number: String,
-        run_time_since_last_service_hours: f64,
-        last_service_month: u8,
-        last_service_year: u16,
-    },
+    DeviceProperties(DeviceProperties),
 }
 
 pub enum Action {
@@ -166,12 +168,12 @@ impl DevicePropertiesCollector {
             && self.last_service_month.is_some()
             && self.last_service_year.is_some()
         {
-            Some(DeviceNotification::DeviceProperties {
+            Some(DeviceNotification::DeviceProperties(DeviceProperties {
                 serial_number: self.serial_number.take().unwrap(),
                 run_time_since_last_service_hours: self.run_time_since_last_service_hours.unwrap(),
                 last_service_month: self.last_service_month.unwrap(),
                 last_service_year: self.last_service_year.unwrap(),
-            })
+            }))
         } else {
             None
         }
