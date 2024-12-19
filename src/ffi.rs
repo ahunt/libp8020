@@ -156,13 +156,12 @@ impl P8020Device {
             fit_factors.capacity(),
         );
         std::mem::forget(fit_factors);
-        let ret = Box::leak(Box::new(P8020TestResult {
+        Box::leak(Box::new(P8020TestResult {
             exercise_count: 1,
             fit_factors: data,
             fit_factors_length: length,
             fit_factors_capacity: capacity,
-        }));
-        ret
+        }))
     }
 
     /// Returns cached deviced properties, or NULL if not available yet. No data
