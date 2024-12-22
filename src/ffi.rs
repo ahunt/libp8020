@@ -278,11 +278,21 @@ impl P8020PortList {
     /// Retrive the list of available ports. Results must be freed using
     /// p8020_port_list_free().
     #[export_name = "p8020_ports_list"]
-    pub extern "C" fn list_devices() -> *mut P8020PortList {
+    pub extern "C" fn list_devices(usb_only: bool) -> *mut P8020PortList {
         let Ok(ports) = serialport::available_ports() else {
             return std::ptr::null_mut();
         };
-        Box::into_raw(Box::new(P8020PortList { ports }))
+        let filtered_ports = if usb_only {
+            ports
+                .into_iter()
+                .filter(|port| matches!(port.port_type, SerialPortType::UsbPort(..)))
+                .collect()
+        } else {
+            ports
+        };
+        Box::into_raw(Box::new(P8020PortList {
+            ports: filtered_ports,
+        }))
     }
 
     #[export_name = "p8020_port_list_count"]
