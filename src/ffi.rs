@@ -6,6 +6,8 @@ use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 
+use serialport::{SerialPortInfo, SerialPortType};
+
 use crate::test::TestNotification;
 use crate::test_config::builtin::BUILTIN_CONFIGS;
 use crate::test_config::TestConfig;
@@ -245,4 +247,108 @@ pub unsafe extern "C" fn string_free(name: *mut c_char) {
 #[export_name = "p8020_test_config_free"]
 pub unsafe extern "C" fn config_free(config: *mut TestConfig) {
     drop(Box::from_raw(config));
+}
+
+pub struct P8020PortList {
+    #[allow(dead_code)]
+    ports: Vec<SerialPortInfo>,
+}
+
+#[repr(C)]
+pub enum P8020PortType {
+    Usb,
+    Unknown,
+}
+
+#[repr(C)]
+pub struct P8020UsbPortInfo {
+    /// Vendor ID.
+    vid: u16,
+    /// Product ID.
+    pid: u16,
+    /// Serial number (string). Can be NULL.
+    serial_number: *mut c_char,
+    /// Manufacturer. Can be NULL.
+    manufacturer: *mut c_char,
+    /// Product (name?). Can be NULL.
+    product: *mut c_char,
+}
+
+impl P8020PortList {
+    /// Retrive the list of available ports. Results must be freed using
+    /// p8020_port_list_free().
+    #[export_name = "p8020_ports_list"]
+    pub extern "C" fn list_devices() -> *mut P8020PortList {
+        let Ok(ports) = serialport::available_ports() else {
+            return std::ptr::null_mut();
+        };
+        Box::into_raw(Box::new(P8020PortList { ports }))
+    }
+
+    #[export_name = "p8020_port_list_count"]
+    pub extern "C" fn count(&self) -> usize {
+        self.ports.len()
+    }
+
+    /// Get the name for port with index. Results must be freed using
+    /// p8020_string_free.
+    #[export_name = "p8020_port_list_port_name"]
+    pub extern "C" fn port_name(&self, index: usize) -> *mut c_char {
+        CString::new(self.ports[index].port_name.clone())
+            .expect("port names are not expected to contain NULLs")
+            .into_raw()
+    }
+
+    /// Get the type of port with index.
+    #[export_name = "p8020_port_list_port_type"]
+    pub extern "C" fn port_type(&self, index: usize) -> P8020PortType {
+        match self.ports[index].port_type {
+            SerialPortType::UsbPort(..) => P8020PortType::Usb,
+            _ => P8020PortType::Unknown,
+        }
+    }
+
+    /// Get USB port details for a port with type Usb. Return NULL if called for
+    /// a non-Usb port. Result must be freed using p8020_usb_port_info_free.
+    #[export_name = "p8020_port_list_usb_port_info"]
+    pub extern "C" fn usb_port_info(&self, index: usize) -> *mut P8020UsbPortInfo {
+        let SerialPortType::UsbPort(ref usb_port_info) = self.ports[index].port_type else {
+            return std::ptr::null_mut();
+        };
+
+        let extract_string = |opt: &Option<String>, field_name: &str| {
+            let Some(ref value) = opt else {
+                return std::ptr::null_mut();
+            };
+            CString::new(value.clone())
+                .unwrap_or_else(|_| panic!("{field_name} not expected to contain NULLS"))
+                .into_raw()
+        };
+
+        Box::into_raw(Box::new(P8020UsbPortInfo {
+            vid: usb_port_info.vid,
+            pid: usb_port_info.pid,
+            serial_number: extract_string(&usb_port_info.serial_number, "serial_number"),
+            manufacturer: extract_string(&usb_port_info.manufacturer, "manufacturer"),
+            product: extract_string(&usb_port_info.product, "product"),
+        }))
+    }
+
+    #[export_name = "p8020_port_list_free"]
+    pub unsafe extern "C" fn free(&mut self) {
+        drop(Box::from_raw(self));
+    }
+}
+
+impl P8020UsbPortInfo {
+    #[export_name = "p8020_usb_port_info_free"]
+    pub extern "C" fn free(&mut self) {
+        unsafe {
+            string_free(self.serial_number);
+            string_free(self.manufacturer);
+            string_free(self.product);
+
+            drop(Box::from_raw(self));
+        }
+    }
 }
