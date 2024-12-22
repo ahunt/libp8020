@@ -42,10 +42,8 @@ pub struct P8020DeviceProperties {
 
 impl P8020DeviceProperties {
     #[export_name = "p8020_device_properties_free"]
-    pub extern "C" fn free(&mut self) {
-        unsafe {
-            drop(Box::from_raw(self));
-        }
+    pub unsafe extern "C" fn free(&mut self) {
+        drop(Box::from_raw(self));
     }
 }
 
@@ -185,24 +183,20 @@ impl P8020Device {
     }
 
     #[export_name = "p8020_device_free"]
-    pub extern "C" fn free(&mut self) {
-        unsafe {
-            drop(Box::from_raw(self));
-        }
+    pub unsafe extern "C" fn free(&mut self) {
+        drop(Box::from_raw(self));
     }
 }
 
 impl P8020TestResult {
     #[export_name = "p8020_test_result_free"]
-    pub extern "C" fn test_result_free(&mut self) {
-        unsafe {
-            let _ = Vec::from_raw_parts(
-                self.fit_factors,
-                self.fit_factors_length,
-                self.fit_factors_capacity,
-            );
-            drop(Box::from_raw(self));
-        }
+    pub unsafe extern "C" fn test_result_free(&mut self) {
+        let _ = Vec::from_raw_parts(
+            self.fit_factors,
+            self.fit_factors_length,
+            self.fit_factors_capacity,
+        );
+        drop(Box::from_raw(self));
     }
 }
 
@@ -244,15 +238,11 @@ pub extern "C" fn config_exercise_name(config: &TestConfig, index: usize) -> *mu
 }
 
 #[export_name = "p8020_string_free"]
-pub extern "C" fn string_free(name: &mut c_char) {
-    unsafe {
-        drop(Box::from_raw(name));
-    }
+pub unsafe extern "C" fn string_free(name: *mut c_char) {
+    drop(Box::from_raw(name));
 }
 
 #[export_name = "p8020_test_config_free"]
-pub extern "C" fn config_free(config: &mut TestConfig) {
-    unsafe {
-        drop(Box::from_raw(config));
-    }
+pub unsafe extern "C" fn config_free(config: *mut TestConfig) {
+    drop(Box::from_raw(config));
 }
