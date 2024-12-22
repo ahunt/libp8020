@@ -234,7 +234,7 @@ pub extern "C" fn config_exercise_count(config: &TestConfig) -> usize {
 }
 
 /// Returns the name of the specified exercise. Returned pointers must be freed
-/// using p8020_test_config_exercise_name_free().
+/// using p8020_string_free().
 #[export_name = "p8020_test_config_exercise_name"]
 pub extern "C" fn config_exercise_name(config: &TestConfig, index: usize) -> *mut c_char {
     let name = config.exercise_names().remove(index);
@@ -243,8 +243,8 @@ pub extern "C" fn config_exercise_name(config: &TestConfig, index: usize) -> *mu
         .into_raw()
 }
 
-#[export_name = "p8020_test_config_exercise_name_free"]
-pub extern "C" fn config_exercise_name_free(name: &mut c_char) {
+#[export_name = "p8020_string_free"]
+pub extern "C" fn string_free(name: &mut c_char) {
     unsafe {
         drop(Box::from_raw(name));
     }
