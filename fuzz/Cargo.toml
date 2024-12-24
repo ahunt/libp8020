@@ -19,3 +19,10 @@ path = "fuzz_targets/fuzz_test_config_parse_from_csv.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_parse_message"
+path = "fuzz_targets/fuzz_parse_message.rs"
+test = false
+doc = false
+bench = false
