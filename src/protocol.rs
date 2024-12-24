@@ -314,9 +314,10 @@ fn parse_setting(setting: &str) -> Result<SettingMessage, ParseError> {
             // They really do specify this as STMxx000vv !?
             // There's probably no point in even trying to handle this, who cares?
             let value = &setting.strip_prefix("STM").unwrap().trim();
-            match if value.len() > 2 {
-                if let Ok(ex) = usize::from_str(&value[0..2]) {
-                    if let Ok(seconds) = usize::from_str(&value[2..]) {
+            match if value.chars().count() > 2 {
+                let split_at = value.char_indices().nth(2).unwrap().0;
+                if let Ok(ex) = usize::from_str(&value[..split_at]) {
+                    if let Ok(seconds) = usize::from_str(&value[split_at..]) {
                         Some(SettingMessage::MaskSampleTime { ex, seconds })
                     } else {
                         None
@@ -337,9 +338,10 @@ fn parse_setting(setting: &str) -> Result<SettingMessage, ParseError> {
         command if command.starts_with("SP") => {
             // Same nonsense as above - "SP xxvvvvv" !?
             let value = &setting.strip_prefix("SP").unwrap().trim();
-            match if value.len() > 2 {
-                if let Ok(ex) = usize::from_str(&value[0..2]) {
-                    if let Ok(fit_factor) = usize::from_str(&value[2..]) {
+            match if value.chars().count() > 2 {
+                let split_at = value.char_indices().nth(2).unwrap().0;
+                if let Ok(ex) = usize::from_str(&value[..split_at]) {
+                    if let Ok(fit_factor) = usize::from_str(&value[split_at..]) {
                         Some(SettingMessage::FitFactorPassLevel { ex, fit_factor })
                     } else {
                         None
@@ -1092,6 +1094,15 @@ mod tests {
                 }),
             },
             TestCase {
+                name: "SettingMaskSampleTimeMalformed",
+                // Found via fuzzing.
+                input: "STM_©",
+                expected_result: Err(ParseError {
+                    received_message: "STM_©".to_string(),
+                    reason: "".to_string(),
+                }),
+            },
+            TestCase {
                 name: "SettingFitFactorPassLevel01_100",
                 input: "SP 0100100",
                 expected_result: Ok(Message::Setting(SettingMessage::FitFactorPassLevel {
@@ -1129,6 +1140,15 @@ mod tests {
                 input: "SP",
                 expected_result: Err(ParseError {
                     received_message: "SP".to_string(),
+                    reason: "".to_string(),
+                }),
+            },
+            TestCase {
+                name: "SettingFitFactorPassLevelMalformed",
+                // Found via fuzzing.
+                input: "SP_©",
+                expected_result: Err(ParseError {
+                    received_message: "SP_©".to_string(),
                     reason: "".to_string(),
                 }),
             },
