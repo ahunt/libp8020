@@ -1,16 +1,28 @@
 # libp8020
 
-A collection of utils (and perhaps a library in future) for 8020A's. This may or
-may not work with your 8020A, any 8020, 8020M, or other devices.
+A little library that allows you to run fit tests on an 8020(A). This may or may
+not work with your 8020A, any 8020, 8020M, or other devices.
 
-To run a fit test (IMPORTANT: this is experimental, calculations have not been
-validated), invoke:
+See https://github.com/ahunt/incolata for the only known usage.
 
-    cargo run --bin test
+## Build
 
-To simply observe the portacount's serial output, invoke:
+```
+cargo build
 
-    cargo run --bin spy
+# To run tests:
+cargo test
+```
+
+## Fuzzing
+
+```
+# To list targets
+cargo fuzz list
+
+# To fuzz a target
+cargo fuzz run <TARGET> --jobs=N
+```
 
 ## Resources
 
