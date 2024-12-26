@@ -35,6 +35,7 @@ pub struct P8020Device {
 }
 
 #[allow(dead_code)] // All fields read via FFI
+#[repr(C)]
 pub struct P8020DeviceProperties {
     pub serial_number: *const libc::c_char,
     pub run_time_since_last_service_hours: f64,
