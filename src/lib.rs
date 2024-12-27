@@ -89,6 +89,23 @@ impl Device {
             .timeout(core::time::Duration::from_millis(100))
             .open()?;
 
+        // OSX-only (possibly AppleUSBFTDI-only): if the device is already
+        // regularly transmitting data (e.g. because it's already in
+        // external-control mode), then the input buffer will start with some
+        // nulls and junk (in my case it's consistently:
+        // [0, 0, 0, 0, 0, 0, 0, 0, 0, 'é', 'r', 'é', 'é', 'j', LF] followed by
+        // normal programming). This breaks BufReader.
+        // The output buffer is also affected by some kind of similar issue,
+        // waiting a little and clearing buffers appears to work well enough so
+        // NBD. This isn't entirely surprising given that the port is opened
+        // first, followed by setting attributes (baud etc.) - but seemingly
+        // this process takes longer on OSX vs Linux.
+        if cfg!(target_os = "macos") {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let clear_result = port.clear(serialport::ClearBuffer::All);
+            eprintln!("OSX clear-input-buffer-hack result: {clear_result:?}")
+        }
+
         // Cloning here is a bit ugly - it's necessary because we want to split reads
         // and writes, and Serialport implements both in the same object. Read and
         // writes are mutating, hence an Arc is insufficient. A (rust) Mutex also
