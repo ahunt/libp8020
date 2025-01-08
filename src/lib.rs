@@ -36,7 +36,9 @@ pub enum DeviceNotification {
     /// the previous RawReading. This is simply the latest sample, no more,
     /// no less - i.e. it might be part of the ambient or specimen purge,
     /// or from the actually sampling period.
-    // TODO: check specs for what the actual allowed range is.
+    /// Minimum non-zero value (for an 8020A) is 0.6 when using 1s sampling. The
+    /// addendum suggests the max would be 999_999_999, but that is likely to be
+    /// physically impossible.
     Sample {
         particle_conc: f64,
     },

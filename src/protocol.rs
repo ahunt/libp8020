@@ -430,8 +430,8 @@ pub fn parse_message(message: &str) -> Result<Message, ParseError> {
         // Samples (i.e. numeric messages) are most common, hence we always
         // check these first, instead of trying to parse a command first and falling
         // back here if command parsing fails.
-        // TODO: consider checking length too - the specs claim this will always be 9
-        // chars long.
+        // Specs claim that this will always be 9 chars long (after unwrapping),
+        // but there's no reason to be strict
         ref message if message.chars().next().unwrap_or('x').is_ascii_digit() => {
             match f64::from_str(message) {
                 Ok(sample) => Ok(Message::Sample(sample)),
