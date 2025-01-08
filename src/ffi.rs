@@ -286,7 +286,12 @@ impl P8020PortList {
         let filtered_ports = if usb_only {
             ports
                 .into_iter()
-                .filter(|port| matches!(port.port_type, SerialPortType::UsbPort(..)))
+                .filter(|port| {
+                    matches!(port.port_type, SerialPortType::UsbPort(..))
+		    // This is a little dishonest - usb_only probably needs to be renamed,
+		    // !usb_only actually implies something like advanced mode.
+                        && (!cfg!(target_os = "macos") || !port.port_name.starts_with("/dev/tty."))
+                })
                 .collect()
         } else {
             ports
