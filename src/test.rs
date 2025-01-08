@@ -334,7 +334,9 @@ impl Test<'_> {
         }
 
         let ambients: Vec<f64> = ambient_samples.collect();
-        let ambient_avg = ambients.iter().sum::<f64>() / (ambients.len() as f64);
+        let ambient_sum = ambients.iter().sum::<f64>();
+        let ambient_avg = ambient_sum / (ambients.len() as f64);
+        let ambient_err = 1.0 / f64::sqrt(ambient_sum * 100.0 / 60.0);
 
         while let Some((exercise_avg, exercise_err)) = exercise_averages_stack.pop() {
             let ff = ambient_avg / exercise_avg;
@@ -342,16 +344,14 @@ impl Test<'_> {
                 "Exercise {}: FF={}±{}",
                 self.exercise_ffs.len(),
                 ff,
-                ff * exercise_err,
+                ff * f64::sqrt(exercise_err.powi(2) + ambient_err.powi(2)),
             );
             self.send_notification(&TestNotification::ExerciseResult(
                 self.exercise_ffs.len(),
                 ff,
-                // TODO: fix this approximation - it's reasonable for high FF
-                // where specimen error dominates, but it's still off by almost
-                // 1% for ambient samples at ambient conc of 1000 (which will
-                // influence uncertainty for low FFs).
-                ff * exercise_err,
+                // This will be completely off in the vicinity of 0 specimen particles (or max
+                // FF).
+                ff * f64::sqrt(exercise_err.powi(2) + ambient_err.powi(2)),
             ));
             self.exercise_ffs.push(ff);
         }
