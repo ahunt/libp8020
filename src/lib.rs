@@ -73,11 +73,11 @@ impl Device {
         port_info: SerialPortInfo,
         device_callback: Option<impl Fn(DeviceNotification) + 'static + std::marker::Send>,
     ) -> serialport::Result<Device> {
-        Device::connect_path(port_info.port_name, device_callback)
+        Device::connect_path(&port_info.port_name, device_callback)
     }
 
     pub fn connect_path(
-        path: String,
+        path: &String,
         device_callback: Option<impl Fn(DeviceNotification) + 'static + std::marker::Send>,
     ) -> serialport::Result<Device> {
         // See "PortaCount Plus Model 8020 Technical Addendum" for specs.

@@ -116,7 +116,7 @@ impl P8020Device {
                 tx_done.send(test_result).unwrap();
             }
         };
-        match Device::connect_path(path, Some(device_callback)) {
+        match Device::connect_path(&path, Some(device_callback)) {
             Ok(device) => Box::into_raw(Box::new(P8020Device {
                 device,
                 rx_done,
