@@ -12,6 +12,7 @@ cbindgen = "0.24.0"
 
 [dependencies]
 clap = {version = "4.5.13", features = ["derive"] }
+ctrlc = "3.4.5"
 libc = "0.2.161"
 serialport = "4.4.0"
 time = {version = "0.3.36", features = ["formatting", "macros"] }
