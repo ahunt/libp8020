@@ -426,7 +426,7 @@ fn start_receiver_thread(
                 Ok(message) => tx_message.send(Some(message)).unwrap(),
                 Err(e) => {
                     // TODO: log any unparseable messages to disk, to allow for later debugging.
-                    println!("command parsing failed: {e:?}")
+                    eprintln!("command parsing failed: {e:?}")
                 }
             }
             buf.clear();
