@@ -57,10 +57,12 @@ pub enum Action {
         test_callback: test::TestCallback,
     },
     CancelTest,
+    CloseConnection,
 }
 
 pub struct Device {
     tx_action: Sender<Action>,
+    device_thread: thread::JoinHandle<()>,
 }
 
 impl Device {
@@ -133,12 +135,22 @@ impl Device {
         let (tx_message, rx_message): (Sender<Option<Message>>, Receiver<Option<Message>>) =
             mpsc::channel();
 
-        let _device_thread =
-            start_device_thread(rx_action, rx_message, tx_command, device_callback);
+        let device_thread = start_device_thread(rx_action, rx_message, tx_command, device_callback);
         let _sender_thread = start_sender_thread(port, rx_command);
         let _receiver_thread = start_receiver_thread(reader, tx_message);
 
-        Ok(Device { tx_action })
+        Ok(Device {
+            tx_action,
+            device_thread,
+        })
+    }
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        let device_thread = std::mem::replace(&mut self.device_thread, thread::spawn(|| {}));
+        let _ = self.tx_action.send(Action::CloseConnection);
+        device_thread.join().unwrap();
     }
 }
 
@@ -284,9 +296,14 @@ fn start_device_thread(
                         send_command(Command::ValveSpecimen);
                         test = None;
                     }
+                    Action::CloseConnection => {
+                        send_command(Command::ExitExternalControl);
+                        return;
+                    }
                 },
                 Err(std::sync::mpsc::TryRecvError::Empty) => (),
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    send_command(Command::ExitExternalControl);
                     send_notification(DeviceNotification::ConnectionClosed);
                     return;
                 }
