@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use serialport::{SerialPortInfo, SerialPortType};
 
 use crate::test::TestNotification;
+use crate::test_config::builtin;
 use crate::test_config::builtin::BUILTIN_CONFIGS;
 use crate::test_config::TestConfig;
 use crate::{Action, Device, DeviceNotification, DeviceProperties};
@@ -213,16 +214,10 @@ pub extern "C" fn load_builtin_config(short_name_raw: *const libc::c_char) -> *m
     let short_name_cstr = unsafe { std::ffi::CStr::from_ptr(short_name_raw) };
     let short_name = String::from_utf8_lossy(short_name_cstr.to_bytes()).to_string();
 
-    for config_csv in BUILTIN_CONFIGS {
-        let mut cursor = std::io::Cursor::new(config_csv.as_bytes());
-        let config = TestConfig::parse_from_csv(&mut cursor).expect("builtin configs must parse");
-        assert!(config.validate().is_ok(), "builtin configs must be valid");
-
-        if config.short_name == short_name {
-            return Box::into_raw(Box::new(config));
-        }
+    match builtin::load_builtin_config(&short_name) {
+        Ok(config) => Box::into_raw(Box::new(config)),
+        Err(_) => std::ptr::null_mut(),
     }
-    std::ptr::null_mut()
 }
 
 #[export_name = "p8020_test_config_exercise_count"]
