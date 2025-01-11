@@ -144,6 +144,10 @@ impl Device {
             device_thread,
         })
     }
+
+    pub fn perform_action(&self, action: Action) {
+        self.tx_action.send(action).unwrap();
+    }
 }
 
 impl Drop for Device {
