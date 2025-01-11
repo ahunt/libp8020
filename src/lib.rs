@@ -3,7 +3,7 @@ extern crate serialport;
 
 mod ffi;
 pub mod protocol;
-mod test;
+pub mod test;
 pub mod test_config;
 
 use serialport::SerialPortInfo;
@@ -15,7 +15,7 @@ use std::thread;
 use protocol::{Command, Message, SettingMessage};
 use test::{StepOutcome, Test};
 
-enum ValveState {
+pub enum ValveState {
     Specimen,
     AwaitingAmbient,
     Ambient,
