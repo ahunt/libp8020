@@ -32,7 +32,9 @@ pub enum Command {
     EnterExternalControl,
     ExitExternalControl,
     Beep {
-        // Duration of the beep in tenths of seconds. Value must be within 1..=99 when sending.
+        // Duration of the beep in tenths of seconds. Value must be within
+        // 1..=60 when sending. (Note: the specs claim 99, but values above
+        // 60 do not work with my 8020A - it returns an error.)
         duration_deciseconds: u8,
     },
     /// VN - sample through ambient tube, or valve ON.
@@ -63,10 +65,10 @@ impl Command {
             Command::Beep {
                 duration_deciseconds,
             } => match duration_deciseconds {
-                1..=99 => Ok(format!("B{:02}", duration_deciseconds)),
+                1..=60 => Ok(format!("B{:02}", duration_deciseconds)),
                 _ => Err(InvalidCommandError::OutOfRange {
                     command: self.clone(),
-                    allowed_range: std::ops::Range { start: 1, end: 100 },
+                    allowed_range: std::ops::Range { start: 1, end: 61 },
                 }),
             },
             Command::ValveAmbient => Ok("VN".to_string()),
@@ -496,7 +498,7 @@ mod tests {
                     command: Command::Beep {
                         duration_deciseconds: 0,
                     },
-                    allowed_range: std::ops::Range { start: 1, end: 100 },
+                    allowed_range: std::ops::Range { start: 1, end: 61 },
                 }),
             },
             TestCase {
@@ -521,22 +523,22 @@ mod tests {
                 expected_result: Ok("B10".to_string()),
             },
             TestCase {
-                name: "Beep99",
+                name: "Beep60",
                 input: Command::Beep {
-                    duration_deciseconds: 99,
+                    duration_deciseconds: 60,
                 },
-                expected_result: Ok("B99".to_string()),
+                expected_result: Ok("B60".to_string()),
             },
             TestCase {
-                name: "Beep100",
+                name: "Beep61",
                 input: Command::Beep {
-                    duration_deciseconds: 100,
+                    duration_deciseconds: 61,
                 },
                 expected_result: Err(InvalidCommandError::OutOfRange {
                     command: Command::Beep {
-                        duration_deciseconds: 100,
+                        duration_deciseconds: 61,
                     },
-                    allowed_range: std::ops::Range { start: 1, end: 100 },
+                    allowed_range: std::ops::Range { start: 1, end: 61 },
                 }),
             },
             TestCase {

@@ -38,6 +38,9 @@ cargo fuzz run <TARGET> --jobs=N
   "VF" (which matches the command to switch valve off) instead of "VO". (By
   comparison, both the switch valve on command and response - in the addendum
   and in reality - are "VN".)
+* Beep command: the maximum duration supported by my 8020A is 60 deciseconds
+  (not 99 as claimed in the addendum). E.g. `B61` -> `EB61` (and no beep).
+   * libp8020 will print an error for durations above 60 deciseconds.
 * Serial numbers can be > 5 chars (Technical Addendum p. 16 shows "SS   vvvvv"
   with an emphasis on three spaces, but specifying niether the length of the
   serial number, nor permitted chars).
