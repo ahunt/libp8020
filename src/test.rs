@@ -405,7 +405,7 @@ impl Test<'_> {
                 *valve_state = ValveState::AwaitingSpecimen;
                 self.tx_command.send(Command::ClearDisplay)?;
                 self.tx_command.send(Command::Beep {
-                    duration_deciseconds: 99,
+                    duration_deciseconds: 50,
                 })?;
                 return Ok(StepOutcome::TestComplete);
             }
