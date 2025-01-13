@@ -277,12 +277,21 @@ impl Test<'_> {
     // store_sample stores the sample without doing any further work - callers
     // must ensure to perform any followup changes to the test (e.g. by moving
     // to the next stage).
-    fn store_sample(&mut self, value: f64, valve_state: &mut ValveState) -> Option<SampleType> {
+    fn store_sample(
+        &mut self,
+        value: f64,
+        valve_state: &mut ValveState,
+    ) -> Result<Option<SampleType>, SendError<Command>> {
         let stage_results = self.results.last_mut().unwrap();
         match valve_state {
-            ValveState::AwaitingAmbient | ValveState::AwaitingSpecimen => {
+            ValveState::AwaitingAmbient => {
+                self.tx_command.send(Command::ValveAmbient)?;
                 eprintln!("discarded a sample while awaiting valve switch");
-                return None;
+                return Ok(None);
+            }
+            ValveState::AwaitingSpecimen => {
+                self.tx_command.send(Command::ValveSpecimen)?;
+                eprintln!("discarded a sample while awaiting valve switch");
             }
             ValveState::Ambient => {
                 assert!(
@@ -297,7 +306,7 @@ impl Test<'_> {
                 );
             }
         }
-        Some(stage_results.append(value))
+        Ok(Some(stage_results.append(value)))
     }
 
     fn calculate_ffs(&mut self) {
@@ -368,7 +377,7 @@ impl Test<'_> {
             "process_sample must not be called after test completion"
         );
 
-        let Some(stored_sample_type) = self.store_sample(value, valve_state) else {
+        let Some(stored_sample_type) = self.store_sample(value, valve_state)? else {
             return Ok(StepOutcome::None);
         };
         self.send_notification(&TestNotification::Sample(SampleData {
