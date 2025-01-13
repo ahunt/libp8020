@@ -372,6 +372,7 @@ fn start_sender_thread(
             "commands must be ASCII, this is a libp8020 bug (got {command})"
         );
 
+        eprintln!(">>> {command}");
         writer
             .write_all(command.as_bytes())
             .expect("failed to write to port");
@@ -426,6 +427,7 @@ fn start_receiver_thread(
             };
             // BufReader removes the trailing <LR>, we need to remove the remaining <CR>.
             let message = buf.trim();
+            eprintln!("<<< {message}");
             match protocol::parse_message(message) {
                 Ok(message) => tx_message.send(Some(message)).unwrap(),
                 Err(e) => {
