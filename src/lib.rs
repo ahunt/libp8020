@@ -387,7 +387,7 @@ fn start_sender_thread(
         // It's also entirely possible that the problem is with my serial/USB adapter.
         // TODO: figure out if we can wait for the echo instead? This is tricky,
         // because it relies on accurate response parsing and/or good heuristics?
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        std::thread::sleep(std::time::Duration::from_millis(200));
     })
 }
 
