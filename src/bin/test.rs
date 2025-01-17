@@ -66,10 +66,8 @@ fn main() {
 
     let test_callback = move |notification: &TestNotification| match notification {
         TestNotification::ExerciseResult(index, ff, _err) => println!("Exercise {index}: FF {ff}"),
-        TestNotification::StateChange(state) => {
-            if let TestState::StartedExercise(exercise) = state {
-                eprintln!("Started Exercise {0}", exercise + 1);
-            }
+        TestNotification::StateChange(TestState::StartedExercise(exercise)) => {
+            eprintln!("Started Exercise {0}", exercise + 1);
         }
         _ => (),
     };
@@ -82,7 +80,7 @@ fn main() {
     match Device::connect_path(path, Some(device_callback)) {
         Ok(device) => {
             // TODO: fix the race condition that requires us to wait prior to
-	    // starting the test (or else the test gets stuck on the wrong valve state).
+            // starting the test (or else the test gets stuck on the wrong valve state).
             std::thread::sleep(std::time::Duration::from_secs(5));
 
             device.perform_action(Action::StartTest {
