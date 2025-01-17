@@ -10,7 +10,6 @@ use serialport::{SerialPortInfo, SerialPortType};
 
 use crate::test::TestNotification;
 use crate::test_config::builtin;
-use crate::test_config::builtin::BUILTIN_CONFIGS;
 use crate::test_config::TestConfig;
 use crate::{Action, Device, DeviceNotification, DeviceProperties};
 
@@ -204,18 +203,13 @@ impl P8020TestResult {
     }
 }
 
-#[export_name = "p8020_test_config_builtin_count"]
-pub extern "C" fn builtin_count() -> usize {
-    BUILTIN_CONFIGS.len()
-}
-
 #[export_name = "p8020_test_config_builtin_load"]
 pub extern "C" fn load_builtin_config(short_name_raw: *const libc::c_char) -> *mut TestConfig {
     let short_name_cstr = unsafe { std::ffi::CStr::from_ptr(short_name_raw) };
     let short_name = String::from_utf8_lossy(short_name_cstr.to_bytes()).to_string();
 
-    match builtin::load_builtin_config(&short_name) {
-        Ok(config) => Box::into_raw(Box::new(config)),
+    match builtin::get_builtin_config(&short_name) {
+        Ok(config) => Box::into_raw(Box::new(config.clone())),
         Err(_) => std::ptr::null_mut(),
     }
 }
