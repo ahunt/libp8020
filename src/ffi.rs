@@ -203,6 +203,24 @@ impl P8020TestResult {
     }
 }
 
+#[repr(C)]
+pub struct P8020TestConfigList<'a> {
+    count: usize,
+    configs: *const &'a TestConfig,
+}
+
+static TEST_CONFIG_LIST: std::sync::LazyLock<Vec<&TestConfig>> =
+    std::sync::LazyLock::new(|| builtin::get_builtin_configs().values().collect());
+
+#[export_name = "p8020_test_config_get_builtin"]
+pub extern "C" fn load_builtin_configs() -> P8020TestConfigList<'static> {
+    let configs = &*TEST_CONFIG_LIST;
+    P8020TestConfigList {
+        count: configs.len(),
+        configs: configs.as_ptr(),
+    }
+}
+
 #[export_name = "p8020_test_config_builtin_load"]
 pub extern "C" fn load_builtin_config(short_name_raw: *const libc::c_char) -> *mut TestConfig {
     let short_name_cstr = unsafe { std::ffi::CStr::from_ptr(short_name_raw) };
@@ -217,6 +235,24 @@ pub extern "C" fn load_builtin_config(short_name_raw: *const libc::c_char) -> *m
 #[export_name = "p8020_test_config_exercise_count"]
 pub extern "C" fn config_exercise_count(config: &TestConfig) -> usize {
     config.exercise_count()
+}
+
+/// Returns the test config short_name. The return pointer must be freed using
+/// p8020_string_free().
+#[export_name = "p8020_test_config_short_name"]
+pub extern "C" fn config_short_name(config: &TestConfig) -> *mut c_char {
+    CString::new(config.short_name.clone())
+        .expect("test config short_names should not contain NULLs")
+        .into_raw()
+}
+
+/// Returns the test config name. The return pointer must be freed using
+/// p8020_string_free().
+#[export_name = "p8020_test_config_name"]
+pub extern "C" fn config_name(config: &TestConfig) -> *mut c_char {
+    CString::new(config.name.clone())
+        .expect("test config short_names should not contain NULLs")
+        .into_raw()
 }
 
 /// Returns the name of the specified exercise. Returned pointers must be freed
