@@ -197,6 +197,9 @@ pub struct Test<'a> {
     // This is NOT the same as exercise_ffs.len(), see above.
     exercises_completed: usize,
     tx_command: &'a Sender<Command>,
+    // Series of initial commands to be sent after the first incoming sample.
+    // See full explanation in Test::create_and_start().
+    initial_commands: Option<Vec<Command>>,
 }
 
 // This implementation is extremely specific to the 8020. However, it's not hard
@@ -207,6 +210,7 @@ impl Test<'_> {
         config: TestConfig,
         tx_command: &Sender<Command>,
         test_callback: TestCallback,
+        initial_commands: Vec<Command>,
     ) -> Test {
         let stage_count = config.stages.len();
         assert!(
@@ -227,6 +231,7 @@ impl Test<'_> {
             exercise_ffs: Vec::with_capacity(stage_count),
             exercises_completed: 0,
             tx_command,
+            initial_commands: Some(initial_commands),
         }
     }
 
@@ -236,26 +241,42 @@ impl Test<'_> {
         valve_state: &mut ValveState,
         test_callback: TestCallback,
     ) -> Result<Test<'a>, SendError<Command>> {
-        let test = Self::create(config, tx_command, test_callback);
+        // The 8020(A) can sometimes swallow incoming commands. This appears to
+        // happen if it is already sending (or just about to send?) its own
+        // message. This is extremely common as the device is sending a sample
+        // every second. Once a test is running, this is generally not a major
+        // issue as we only send commands in direct response to an incoming sample
+        // (e.g. last sample for an exercise -> switch valve to next state, update
+        // display, etc.). But this is a common issue when starting a test -
+        // therefore we avoid immediately sending the initial series of commands
+        // as they may be swallowed, and instead save them to be sent after the
+        // next sample. I've never seen more than the first two commands be
+        // swallowed, but if the ValveAmbient command is missed then the test
+        // gets stuck because the test can't progress until it receives a first
+        // ambient sample.
+        let mut initial_commands = Vec::new();
+
         match valve_state {
             ValveState::Ambient | ValveState::AwaitingAmbient => (),
             ValveState::Specimen | ValveState::AwaitingSpecimen => {
-                tx_command.send(Command::ValveAmbient)?;
+                initial_commands.push(Command::ValveAmbient);
                 *valve_state = ValveState::AwaitingAmbient;
             }
         };
-        tx_command.send(Command::ClearDisplay)?;
-        tx_command.send(Command::Indicator(Indicator {
+        initial_commands.push(Command::ClearDisplay);
+        initial_commands.push(Command::Indicator(Indicator {
             in_progress: true,
             ..Indicator::empty()
-        }))?;
-        tx_command.send(Command::DisplayExercise(1))?;
+        }));
+        initial_commands.push(Command::DisplayExercise(1));
+        initial_commands.push(Command::Beep {
+            duration_deciseconds: 40,
+        });
+
+        let test = Self::create(config, tx_command, test_callback, initial_commands);
         test.send_notification(&TestNotification::StateChange(TestState::StartedExercise(
             0,
         )));
-        tx_command.send(Command::Beep {
-            duration_deciseconds: 40,
-        })?;
         Ok(test)
     }
 
@@ -285,13 +306,22 @@ impl Test<'_> {
         let stage_results = self.results.last_mut().unwrap();
         match valve_state {
             ValveState::AwaitingAmbient => {
+                // Send the appropriate command to be safe. See comment on
+                // initial_commands in Test::create_and_start for context.
+                // The initial_commands approach is expected to be sufficient,
+                // but sending the command repeatedly makes us more robust
+                // against surprises (and doing so is not expensive/harmful).
+                // Failing to switch the valve is disastrous as the test will
+                // never proceed. Other commands are less critical - display
+                // bugs are annoying but NBD.
                 self.tx_command.send(Command::ValveAmbient)?;
-                eprintln!("discarded a sample while awaiting valve switch");
+                eprintln!("discarded a sample while awaiting ambient valve switch");
                 return Ok(None);
             }
             ValveState::AwaitingSpecimen => {
+                // See command in AwaitingAmbient case above.
                 self.tx_command.send(Command::ValveSpecimen)?;
-                eprintln!("discarded a sample while awaiting valve switch");
+                eprintln!("discarded a sample while awaiting specimen valve switch");
             }
             ValveState::Ambient => {
                 assert!(
@@ -376,6 +406,12 @@ impl Test<'_> {
                 && self.results.last().unwrap().is_complete())),
             "process_sample must not be called after test completion"
         );
+
+        if let Some(initial_commands) = Option::take(&mut self.initial_commands) {
+            for command in initial_commands {
+                self.tx_command.send(command)?;
+            }
+        }
 
         let Some(stored_sample_type) = self.store_sample(value, valve_state)? else {
             return Ok(StepOutcome::None);
