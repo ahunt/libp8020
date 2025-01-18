@@ -1,0 +1,20 @@
+# ISO 16975-3:2017 Fit Test protocol
+# Taken from https://tsi.com/industrial-manufacturing/learn/respirator-fit-test-protocol-comparison
+# Note: this link claims that in-mask sampling must be at least 60s long,
+# similar to HSE OC 282/2.
+TEST,"ISO 16975-3:2017",iso_16975-3
+AMBIENT,4,5
+EXERCISE,11,60,"Normal breathing in a standing position"
+AMBIENT,4,5
+EXERCISE,11,60,"Deep breathing in a normal standing position"
+AMBIENT,4,5
+EXERCISE,11,60,"Standing or sitting, turning head side to side"
+AMBIENT,4,5
+EXERCISE,11,60,"Standing in place, moving head up and down"
+AMBIENT,4,5
+EXERCISE,11,60,"Talking by reading from a prepared text, counting bakward from 100 or reciting (poem)"
+AMBIENT,4,5
+EXERCISE,11,60,"Bending over the waist, or if equipment prevents bending over, jogging in place"
+AMBIENT,4,5
+EXERCISE,11,60,"Normal breathing"
+AMBIENT,4,5

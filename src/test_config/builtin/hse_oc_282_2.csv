@@ -1,0 +1,25 @@
+# HSE OC 282/2
+# TSI calls this HSE INDG 479 in some documents.
+# OC 282/2: https://www.fit2fit.org/wp-content/uploads/2015/01/282_28.pdf
+# INDG 479: https://www.hse.gov.uk/pubns/indg479.pdf
+# The former specifies at least 60s in-mask sample time per exercise, other
+# values are not formally specified (therefore the values used for OSHA tests
+# are used here).
+# Note: the HSE protocol specifies riding an exercise bike, running on a
+# treadmill, or performing a stepping exercise.
+TEST,"HSE OC 282/2",hse_oc_282_2
+AMBIENT,4,5
+EXERCISE,11,60,"Normal breathing"
+AMBIENT,4,5
+EXERCISE,11,60,"Deep breathing"
+AMBIENT,4,5
+EXERCISE,11,60,"Turning head side to side"
+AMBIENT,4,5
+EXERCISE,11,60,"Moving head up and down"
+AMBIENT,4,5
+EXERCISE,11,60,"Talking"
+AMBIENT,4,5
+EXERCISE,11,60,"Bending over"
+AMBIENT,4,5
+EXERCISE,11,60,"Normal breathing"
+AMBIENT,4,5
