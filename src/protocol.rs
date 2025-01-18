@@ -47,6 +47,8 @@ pub enum Command {
     Indicator(Indicator),
     ClearDisplay,
     RequestSettings,
+    DisableSampling,
+    EnableSampling,
 }
 
 #[derive(Debug, PartialEq)]
@@ -114,6 +116,8 @@ impl Command {
             }
             Command::ClearDisplay => Ok("K".to_string()),
             Command::RequestSettings => Ok("S".to_string()),
+            Command::EnableSampling => Ok("ZE".to_string()),
+            Command::DisableSampling => Ok("ZD".to_string()),
         }
     }
 }
@@ -161,6 +165,8 @@ fn parse_command(command: &str) -> Result<Command, ParseError> {
         "OK" => Ok(Command::EnterExternalControl),
         "G" => Ok(Command::ExitExternalControl),
         "K" => Ok(Command::ClearDisplay),
+        "ZE" => Ok(Command::EnableSampling),
+        "ZD" => Ok(Command::DisableSampling),
         ref command if command.starts_with("B") => {
             // According to spec, the range is 1..=99 (padded to two digits),
             // but I don't think there's much harm in being more permissive.
@@ -727,6 +733,16 @@ mod tests {
                 input: Command::RequestSettings,
                 expected_result: Ok("S".to_string()),
             },
+            TestCase {
+                name: "EnableSampling",
+                input: Command::EnableSampling,
+                expected_result: Ok("ZE".to_string()),
+            },
+            TestCase {
+                name: "DisableSampling",
+                input: Command::DisableSampling,
+                expected_result: Ok("ZD".to_string()),
+            },
         ];
         for case in tests {
             let got = case.input.to_wire();
@@ -1237,6 +1253,16 @@ mod tests {
                     received_message: "SD".to_string(),
                     reason: "".to_string(),
                 }),
+            },
+            TestCase {
+                name: "EnableSampling",
+                input: "ZE",
+                expected_result: Ok(Message::Response(Command::EnableSampling)),
+            },
+            TestCase {
+                name: "DisableSampling",
+                input: "ZD",
+                expected_result: Ok(Message::Response(Command::DisableSampling)),
             },
         ];
         for case in tests {
