@@ -210,7 +210,7 @@ pub struct P8020TestConfigList<'a> {
 }
 
 static TEST_CONFIG_LIST: std::sync::LazyLock<Vec<&TestConfig>> =
-    std::sync::LazyLock::new(|| builtin::get_builtin_configs().values().collect());
+    std::sync::LazyLock::new(|| (*builtin::BUILTIN_CONFIGS).values().collect());
 
 #[export_name = "p8020_test_config_get_builtin"]
 pub extern "C" fn load_builtin_configs() -> P8020TestConfigList<'static> {

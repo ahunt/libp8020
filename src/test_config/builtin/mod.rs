@@ -21,11 +21,8 @@ pub enum BuiltinConfigError {
     NotFound,
 }
 
-static BUILTIN_CONFIGS: std::sync::OnceLock<HashMap<String, crate::test_config::TestConfig>> =
-    std::sync::OnceLock::new();
-
-pub fn get_builtin_configs() -> &'static HashMap<String, crate::test_config::TestConfig> {
-    BUILTIN_CONFIGS.get_or_init(|| {
+pub static BUILTIN_CONFIGS: std::sync::LazyLock<HashMap<String, crate::test_config::TestConfig>> =
+    std::sync::LazyLock::new(|| {
         let mut configs = HashMap::with_capacity(BUILTIN_CONFIGS_RAW.len());
         for config_csv in BUILTIN_CONFIGS_RAW {
             let mut cursor = std::io::Cursor::new(config_csv.as_bytes());
@@ -38,13 +35,12 @@ pub fn get_builtin_configs() -> &'static HashMap<String, crate::test_config::Tes
             configs.insert(name, config);
         }
         configs
-    })
-}
+    });
 
 pub fn get_builtin_config(
     short_name: &String,
 ) -> Result<&'static crate::test_config::TestConfig, BuiltinConfigError> {
-    match get_builtin_configs().get(short_name) {
+    match (*BUILTIN_CONFIGS).get(short_name) {
         Some(config) => Ok(config),
         None => Err(BuiltinConfigError::NotFound),
     }
@@ -56,7 +52,7 @@ mod tests {
 
     #[test]
     fn test_builtin_configs_load_and_validate() {
-        for config in get_builtin_configs().values() {
+        for config in (*BUILTIN_CONFIGS).values() {
             assert!(config.validate().is_ok());
         }
     }

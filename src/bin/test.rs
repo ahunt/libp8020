@@ -2,12 +2,12 @@ use std::env;
 use std::sync::mpsc;
 
 use p8020::test::{TestNotification, TestState};
-use p8020::test_config::builtin::get_builtin_configs;
+use p8020::test_config::builtin::BUILTIN_CONFIGS;
 use p8020::{Action, Device, DeviceNotification};
 
 fn print_available_configs() {
     eprintln!("Available protocols:");
-    for config in get_builtin_configs().values() {
+    for config in (*BUILTIN_CONFIGS).values() {
         eprintln!("\t{0} ({1})", config.short_name, config.name);
     }
 }
@@ -27,7 +27,7 @@ fn main() {
     } else {
         &"osha_legacy".to_string()
     };
-    let Some((_, test_config)) = get_builtin_configs()
+    let Some((_, test_config)) = (*BUILTIN_CONFIGS)
         .iter()
         .find(|(short_name, _)| *short_name == protocol_name)
     else {
