@@ -213,7 +213,7 @@ static TEST_CONFIG_LIST: std::sync::LazyLock<Vec<&TestConfig>> =
     std::sync::LazyLock::new(|| (*builtin::BUILTIN_CONFIGS).values().collect());
 
 #[export_name = "p8020_test_config_get_builtin"]
-pub extern "C" fn load_builtin_configs() -> P8020TestConfigList<'static> {
+pub extern "C" fn get_builtin_configs() -> P8020TestConfigList<'static> {
     let configs = &*TEST_CONFIG_LIST;
     P8020TestConfigList {
         count: configs.len(),
@@ -221,8 +221,8 @@ pub extern "C" fn load_builtin_configs() -> P8020TestConfigList<'static> {
     }
 }
 
-#[export_name = "p8020_test_config_builtin_load"]
-pub extern "C" fn load_builtin_config(id_raw: *const libc::c_char) -> *mut TestConfig {
+#[export_name = "p8020_test_config_builtin_get"]
+pub extern "C" fn get_builtin_config(id_raw: *const libc::c_char) -> *mut TestConfig {
     let id_cstr = unsafe { std::ffi::CStr::from_ptr(id_raw) };
     let id = String::from_utf8_lossy(id_cstr.to_bytes()).to_string();
 
