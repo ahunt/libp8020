@@ -43,6 +43,7 @@ pub enum Command {
     ValveSpecimen,
     // Display exercise number: value must be within 1..=19 when sending.
     DisplayExercise(u8),
+    // Show concentration on screen. Must be <= 999_999.
     DisplayConcentration(f64),
     Indicator(Indicator),
     ClearDisplay,
@@ -83,24 +84,16 @@ impl Command {
                 }),
             },
             Command::DisplayConcentration(value) => {
-                // I haven't figured out a way to control segments directly yet
-                // (including 'A' or 'a' as part of this command does not work for example...).
-                // Being able to do so would be nice for indicating the current exercise name.
-                if *value < 100.0 {
-                    Ok(format!("D{value:09.2}"))
-                } else {
-                    let value = value.round() as usize;
-                    if value > 999_999_999 {
-                        return Err(InvalidCommandError::OutOfRange {
-                            command: self.clone(),
-                            allowed_range: std::ops::Range {
-                                start: 0,
-                                end: 999_999_999,
-                            },
-                        });
-                    }
-                    Ok(format!("D{value:09.0}"))
+                if *value > 999_999.0 {
+                    return Err(InvalidCommandError::OutOfRange {
+                        command: self.clone(),
+                        allowed_range: std::ops::Range {
+                            start: 0,
+                            end: 999_999,
+                        },
+                    });
                 }
+                Ok(format!("D{value:09.2}"))
             }
             Command::Indicator(indicator) => {
                 let mut out = String::with_capacity(9);
@@ -603,31 +596,26 @@ mod tests {
             TestCase {
                 name: "DisplayConcentration 100.0",
                 input: Command::DisplayConcentration(100.0),
-                expected_result: Ok("D000000100".to_string()),
+                expected_result: Ok("D000100.00".to_string()),
             },
             TestCase {
                 name: "DisplayConcentration 100.4",
                 input: Command::DisplayConcentration(100.4),
-                expected_result: Ok("D000000100".to_string()),
+                expected_result: Ok("D000100.40".to_string()),
             },
             TestCase {
-                name: "DisplayConcentration 100.5",
-                input: Command::DisplayConcentration(100.5),
-                expected_result: Ok("D000000101".to_string()),
+                name: "DisplayConcentration 999_999.0",
+                input: Command::DisplayConcentration(999_999.0),
+                expected_result: Ok("D999999.00".to_string()),
             },
             TestCase {
-                name: "DisplayConcentration 999_999_999.0",
-                input: Command::DisplayConcentration(999_999_999.0),
-                expected_result: Ok("D999999999".to_string()),
-            },
-            TestCase {
-                name: "DisplayConcentration 1_000_000_000.0",
-                input: Command::DisplayConcentration(1_000_000_000.0),
+                name: "DisplayConcentration 1_000_000.0",
+                input: Command::DisplayConcentration(1_000_000.0),
                 expected_result: Err(InvalidCommandError::OutOfRange {
-                    command: Command::DisplayConcentration(1_000_000_000.0),
+                    command: Command::DisplayConcentration(1_000_000.0),
                     allowed_range: std::ops::Range {
                         start: 0,
-                        end: 999_999_999,
+                        end: 999_999,
                     },
                 }),
             },
