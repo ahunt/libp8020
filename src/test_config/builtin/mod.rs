@@ -32,7 +32,7 @@ pub static BUILTIN_CONFIGS: std::sync::LazyLock<HashMap<String, crate::test_conf
             let mut cursor = std::io::Cursor::new(config_csv.as_bytes());
             let config =
                 TestConfig::parse_from_csv(&mut cursor).expect("builtin configs must parse");
-            let id = config.short_name.clone();
+            let id = config.id.clone();
             if configs.contains_key(&id) {
                 panic!("builtin configs must each have a unique identifier");
             }
@@ -42,9 +42,10 @@ pub static BUILTIN_CONFIGS: std::sync::LazyLock<HashMap<String, crate::test_conf
     });
 
 pub fn get_builtin_config(
-    short_name: &String,
+    id: &String,
 ) -> Result<&'static crate::test_config::TestConfig, BuiltinConfigError> {
-    match (*BUILTIN_CONFIGS).get(short_name) {
+    println!("builtins: {:?}", *BUILTIN_CONFIGS);
+    match (*BUILTIN_CONFIGS).get(id) {
         Some(config) => Ok(config),
         None => Err(BuiltinConfigError::NotFound),
     }

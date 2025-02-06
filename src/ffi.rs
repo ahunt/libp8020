@@ -222,11 +222,11 @@ pub extern "C" fn load_builtin_configs() -> P8020TestConfigList<'static> {
 }
 
 #[export_name = "p8020_test_config_builtin_load"]
-pub extern "C" fn load_builtin_config(short_name_raw: *const libc::c_char) -> *mut TestConfig {
-    let short_name_cstr = unsafe { std::ffi::CStr::from_ptr(short_name_raw) };
-    let short_name = String::from_utf8_lossy(short_name_cstr.to_bytes()).to_string();
+pub extern "C" fn load_builtin_config(id_raw: *const libc::c_char) -> *mut TestConfig {
+    let id_cstr = unsafe { std::ffi::CStr::from_ptr(id_raw) };
+    let id = String::from_utf8_lossy(id_cstr.to_bytes()).to_string();
 
-    match builtin::get_builtin_config(&short_name) {
+    match builtin::get_builtin_config(&id) {
         Ok(config) => Box::into_raw(Box::new(config.clone())),
         Err(_) => std::ptr::null_mut(),
     }
@@ -237,12 +237,12 @@ pub extern "C" fn config_exercise_count(config: &TestConfig) -> usize {
     config.exercise_count()
 }
 
-/// Returns the test config short_name. The return pointer must be freed using
+/// Returns the test config id. The return pointer must be freed using
 /// p8020_string_free().
-#[export_name = "p8020_test_config_short_name"]
-pub extern "C" fn config_short_name(config: &TestConfig) -> *mut c_char {
-    CString::new(config.short_name.clone())
-        .expect("test config short_names should not contain NULLs")
+#[export_name = "p8020_test_config_id"]
+pub extern "C" fn config_id(config: &TestConfig) -> *mut c_char {
+    CString::new(config.id.clone())
+        .expect("test config ids should not contain NULLs")
         .into_raw()
 }
 
@@ -251,7 +251,7 @@ pub extern "C" fn config_short_name(config: &TestConfig) -> *mut c_char {
 #[export_name = "p8020_test_config_name"]
 pub extern "C" fn config_name(config: &TestConfig) -> *mut c_char {
     CString::new(config.name.clone())
-        .expect("test config short_names should not contain NULLs")
+        .expect("test config names should not contain NULLs")
         .into_raw()
 }
 

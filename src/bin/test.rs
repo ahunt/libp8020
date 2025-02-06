@@ -8,7 +8,7 @@ use p8020::{Action, Device, DeviceNotification};
 fn print_available_configs() {
     eprintln!("Available protocols:");
     for config in (*BUILTIN_CONFIGS).values() {
-        eprintln!("\t{0} ({1})", config.short_name, config.name);
+        eprintln!("\t{0} ({1})", config.id, config.name);
     }
 }
 
@@ -29,7 +29,7 @@ fn main() {
     };
     let Some((_, test_config)) = (*BUILTIN_CONFIGS)
         .iter()
-        .find(|(short_name, _)| *short_name == protocol_name)
+        .find(|(id, _)| *id == protocol_name)
     else {
         eprintln!("Protocol {protocol_name} not found.\n");
         print_available_configs();

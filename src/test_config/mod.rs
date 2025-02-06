@@ -27,7 +27,7 @@ impl TestStage {
 #[derive(Clone, Debug, PartialEq)]
 pub struct TestConfig {
     pub name: String,
-    pub short_name: String,
+    pub id: String,
     pub stages: Vec<TestStage>,
 }
 
@@ -296,12 +296,8 @@ impl TestConfig {
             ));
         }
 
-        let (name, short_name) = test_header.unwrap();
-        Ok(TestConfig {
-            name,
-            short_name,
-            stages,
-        })
+        let (name, id) = test_header.unwrap();
+        Ok(TestConfig { name, id, stages })
     }
 
     pub fn exercise_count(&self) -> usize {
@@ -338,7 +334,7 @@ mod tests {
             result,
             Ok(TestConfig {
                 name: "OSHA Fast FFP (Modified Filtering Facepiece protocol)".to_string(),
-                short_name: "osha_fast_ffp".to_string(),
+                id: "osha_fast_ffp".to_string(),
                 stages: vec![
                     TestStage::AmbientSample {
                         counts: StageCounts {
@@ -389,7 +385,7 @@ mod tests {
     fn test_validate() {
         let base_config = TestConfig {
             name: "foo".to_string(),
-            short_name: "bar".to_string(),
+            id: "bar".to_string(),
             stages: vec![],
         };
 
