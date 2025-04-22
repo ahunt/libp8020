@@ -378,16 +378,25 @@ fn start_sender_thread(
             .expect("failed to write to port");
         writer.write_all(b"\r").expect("failed to write to port");
 
-        // Flow control is a bit laggy or broken: sending a second message within
-        // approx 52ms of a previous message will result in the second message being
-        // ignored (which obviously breaks subsequent assumptions).
-        // To be safe I use a 100ms delay. (For my device, the threshold was right
-        // around 52ms, but it may be different for other devices/computers/OS's/
-        // whatever.)
-        // It's also entirely possible that the problem is with my serial/USB adapter.
-        // TODO: figure out if we can wait for the echo instead? This is tricky,
-        // because it relies on accurate response parsing and/or good heuristics?
-        std::thread::sleep(std::time::Duration::from_millis(200));
+        // Flow control is a bit laggy or broken, and behaviour varies between
+        // devices:
+        // 8020A: sending a second message within approx 52ms of a previous message
+        // will result in the second message always being ignored (which obviously
+        // breaks subsequent assumptions). And DisplayConcentration messages had a
+        // tendency of being lost with wait of less than 200ms (see
+        // 3d7f2d6b92adc95dadce615b851b77f1b08310a5).
+        // 8020Mgen1: sending a second message within 300ms could result in malformed
+        // (non-UTF-8) errors being returned, which breaks assumptions in BufReader.
+        // And less than 400ms wait results in the first beep being swallowed.
+        // Therefore: pick 400ms (for all devices) because it doesn't result in
+        // significant drawbacks. A better approach might be to wait for each command's
+        // echo prior to sending another message, but that is trickier to implement
+        // robustly (in particular because not all commands trigger a matching echo).
+        // It would also be possible to use different durations depending on the
+        // specific device, but that requires being able to reliably detect the device
+        // type, which I'm hesitant to do without access to a sufficiently large number
+        // of different devices.
+        std::thread::sleep(std::time::Duration::from_millis(400));
     })
 }
 
