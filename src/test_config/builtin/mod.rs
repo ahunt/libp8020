@@ -9,8 +9,9 @@ pub const OSHA_FAST_ELASTO: &str = include_str!("osha_fast_elasto.csv");
 pub const CRASH_2_5: &str = include_str!("crash_2_5.csv");
 pub const HSE_INDG_479: &str = include_str!("hse_indg_479.csv");
 pub const ISO_16975_3_2017: &str = include_str!("iso_16975-3_2017.csv");
+pub const LIVE_MODE_1H: &str = include_str!("live_mode_1h.csv");
 
-const BUILTIN_CONFIGS_RAW: [&str; 7] = [
+const BUILTIN_CONFIGS_RAW: [&str; 8] = [
     OSHA,
     OSHA_LEGACY,
     OSHA_FAST_FFP,
@@ -18,6 +19,7 @@ const BUILTIN_CONFIGS_RAW: [&str; 7] = [
     CRASH_2_5,
     HSE_INDG_479,
     ISO_16975_3_2017,
+    LIVE_MODE_1H,
 ];
 
 #[derive(Debug)]

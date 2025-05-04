@@ -1,0 +1,33 @@
+# Live Mode
+# This protocol is based on hearsay - the author has never used a real fast
+# mode.
+# Ambient sample durations are longer than typical protocols:
+# - Because why not?
+# - Because live mode will often be used in outdoor testing, where ambient
+# levels might not be particularly stable.
+TEST,"Live Mode (1h)",live_mode_1h
+AMBIENT,4,11
+EXERCISE,11,274,"Live Mode"
+AMBIENT,4,11
+EXERCISE,11,274,"Live Mode"
+AMBIENT,4,11
+EXERCISE,11,274,"Live Mode"
+AMBIENT,4,11
+EXERCISE,11,274,"Live Mode"
+AMBIENT,4,11
+EXERCISE,11,274,"Live Mode"
+AMBIENT,4,11
+EXERCISE,11,274,"Live Mode"
+AMBIENT,4,11
+EXERCISE,11,274,"Live Mode"
+AMBIENT,4,11
+EXERCISE,11,274,"Live Mode"
+AMBIENT,4,11
+EXERCISE,11,274,"Live Mode"
+AMBIENT,4,11
+EXERCISE,11,274,"Live Mode"
+AMBIENT,4,11
+EXERCISE,11,274,"Live Mode"
+AMBIENT,4,11
+EXERCISE,11,274,"Live Mode"
+AMBIENT,4,11
