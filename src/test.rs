@@ -22,6 +22,7 @@ pub enum SampleType {
 
 #[repr(C)]
 pub struct SampleData {
+    device_id: usize,
     exercise: usize,
     value: f64,
     sample_type: SampleType,
@@ -159,14 +160,16 @@ pub enum TestNotification {
     /// the entire test) was completed, it is not safe to assume that all
     /// data for that exercise (or the entire test) is available yet.
     StateChange(TestState),
-    /// ExerciseResult indicates that the FF for exercise N was M.
-    ExerciseResult(usize, f64, f64),
+    /// ExerciseResult indicates that the FF for device M for exercise N was O with error P.
+    // TODO: migrate to struct-like case.
+    ExerciseResult(usize, usize, f64, f64),
     /// Sample indicates a fresh sample from the 8020. This differs from
     /// RawSample in that it contains metadata about how this reading is being
     /// used and where it came from (ambient vs specimen, sample vs purge).
     /// moreover, this data is only available during a test.
     Sample(SampleData),
     LiveFF {
+        device_id: usize,
         exercise: usize,
         index: usize,
         fit_factor: f64,
@@ -175,7 +178,11 @@ pub enum TestNotification {
     /// all data collected so far, namely average specimen particles calculated
     /// from all specimen samples during the current Exercise, divided by
     /// average ambient particles from the last AmbientSample stage.
-    InterimFF { exercise: usize, fit_factor: f64 },
+    InterimFF {
+        device_id: usize,
+        exercise: usize,
+        fit_factor: f64,
+    },
 }
 
 pub enum StepOutcome {
@@ -188,6 +195,7 @@ pub type TestCallback = Option<Box<dyn Fn(&TestNotification) + 'static + std::ma
 pub struct Test<'a> {
     config: TestConfig,
     device_synchroniser: Option<DeviceSynchroniser>,
+    device_id: usize,
     test_callback: TestCallback,
     // TODO: figure out a better way of representing all of this, it's a little confusing.
     current_stage: usize,
@@ -226,9 +234,14 @@ impl Test<'_> {
         );
         let mut results = Vec::with_capacity(stage_count);
         results.push(StageResults::from(&config.stages[0]));
+        let device_id = match &device_synchroniser {
+            Some(ds) => ds.device_id,
+            None => 0,
+        };
         Test {
             config,
             device_synchroniser,
+            device_id,
             test_callback,
             current_stage: 0,
             results,
@@ -397,6 +410,7 @@ impl Test<'_> {
                 ff * f64::sqrt(exercise_err.powi(2) + ambient_err.powi(2)),
             );
             self.send_notification(&TestNotification::ExerciseResult(
+                self.device_id,
                 self.exercise_ffs.len(),
                 ff,
                 // This will be completely off in the vicinity of 0 specimen particles (or max
@@ -428,6 +442,7 @@ impl Test<'_> {
             return Ok(StepOutcome::None);
         };
         self.send_notification(&TestNotification::Sample(SampleData {
+            device_id: self.device_id,
             exercise: self.exercises_completed,
             value,
             sample_type: stored_sample_type,
@@ -440,12 +455,14 @@ impl Test<'_> {
                 let ambient_avg = self.last_ambient().avg();
                 let live_ff = ambient_avg / value.max(100.0 / 60.0);
                 self.send_notification(&TestNotification::LiveFF {
+                    device_id: self.device_id,
                     exercise: self.exercises_completed,
                     index: samples.len(),
                     fit_factor: live_ff,
                 });
                 let interim_ff = ambient_avg / stage_results.avg();
                 self.send_notification(&TestNotification::InterimFF {
+                    device_id: self.device_id,
                     exercise: self.exercises_completed,
                     fit_factor: interim_ff,
                 });

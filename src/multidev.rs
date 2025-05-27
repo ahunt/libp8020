@@ -39,7 +39,7 @@ impl Synchroniser {
 }
 
 pub struct DeviceSynchroniser {
-    device_id: usize,
+    pub device_id: usize,
     synchroniser: Arc<Synchroniser>,
 }
 
