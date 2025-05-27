@@ -61,12 +61,35 @@ impl FFICallbackDataHandle {
     }
 }
 
-#[repr(C)]
 pub struct P8020TestResult {
+    // Number of completed exercises. Arguably redundant, as all entries in
+    // fit_factors should be vecs with len() == exercise_count.
     exercise_count: usize,
-    fit_factors: *mut f64,
-    fit_factors_length: usize,
-    fit_factors_capacity: usize,
+    // Fit factors by device and exercise: fit_factors[device_id][exercise] = ...
+    fit_factors: Vec<Vec<f64>>,
+}
+
+impl P8020TestResult {
+    #[export_name = "p8020_test_result_get_exercise_count"]
+    pub extern "C" fn exercise_count(&self) -> usize {
+        self.exercise_count
+    }
+
+    #[export_name = "p8020_test_result_get_device_count"]
+    pub extern "C" fn device_count(&self) -> usize {
+        self.fit_factors.len()
+    }
+
+    #[export_name = "p8020_test_result_get_fit_factor"]
+    pub extern "C" fn fit_factor(&self, device_id: usize, exercise: usize) -> f64 {
+        match self.fit_factors.get(device_id) {
+            Some(device_fit_factors) => match device_fit_factors.get(exercise) {
+                Some(ff) => *ff,
+                None => -1.0,
+            },
+            None => -1.0,
+        }
+    }
 }
 
 impl P8020Device {
@@ -143,26 +166,21 @@ impl P8020Device {
             .send(Action::StartTest {
                 config: test_config.clone(),
                 test_callback: Some(Box::new(test_callback)),
+                device_synchroniser: None,
             })
             .expect("device connection is (probably) gone");
 
-        let Ok(mut fit_factors) = self.rx_done.recv().expect("rx_done failed") else {
+        let Ok(device_fit_factors) = self.rx_done.recv().expect("rx_done failed") else {
             return std::ptr::null_mut();
         };
 
-        // Could be switched to Vec.into_raw_parts() once it become stable:
-        // https://github.com/rust-lang/rust/issues/65816
-        let (data, length, capacity) = (
-            fit_factors.as_mut_ptr(),
-            fit_factors.len(),
-            fit_factors.capacity(),
-        );
-        std::mem::forget(fit_factors);
+        let exercise_count = device_fit_factors.len();
+        let mut fit_factors = Vec::with_capacity(1);
+        fit_factors.push(device_fit_factors);
+
         Box::into_raw(Box::new(P8020TestResult {
-            exercise_count: 1,
-            fit_factors: data,
-            fit_factors_length: length,
-            fit_factors_capacity: capacity,
+            exercise_count,
+            fit_factors,
         }))
     }
 
@@ -194,11 +212,6 @@ impl P8020Device {
 impl P8020TestResult {
     #[export_name = "p8020_test_result_free"]
     pub unsafe extern "C" fn test_result_free(&mut self) {
-        let _ = Vec::from_raw_parts(
-            self.fit_factors,
-            self.fit_factors_length,
-            self.fit_factors_capacity,
-        );
         drop(Box::from_raw(self));
     }
 }
