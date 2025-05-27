@@ -2,6 +2,7 @@ extern crate libc;
 extern crate serialport;
 
 mod ffi;
+mod multidev;
 pub mod protocol;
 pub mod test;
 pub mod test_config;
