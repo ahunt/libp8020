@@ -16,6 +16,7 @@ use crate::{Action, Device, DeviceNotification, DeviceProperties};
 #[repr(C)]
 pub enum P8020DeviceNotification {
     Sample {
+        device_id: usize,
         #[allow(dead_code)] // Used via FFI
         particle_conc: f64,
     },
@@ -115,7 +116,10 @@ impl P8020Device {
         let device_callback = move |notification: DeviceNotification| {
             let (notification, test_result) = match notification {
                 DeviceNotification::Sample { particle_conc } => (
-                    Some(P8020DeviceNotification::Sample { particle_conc }),
+                    Some(P8020DeviceNotification::Sample {
+                        device_id: 0,
+                        particle_conc,
+                    }),
                     None,
                 ),
                 DeviceNotification::ConnectionClosed => {
