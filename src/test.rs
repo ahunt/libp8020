@@ -1,5 +1,6 @@
 use std::sync::mpsc::{SendError, Sender};
 
+use crate::multidev::{DeviceSynchroniser, StepDirective};
 use crate::protocol::{Command, Indicator, Message};
 use crate::test_config::{StageCounts, TestConfig, TestStage};
 use crate::ValveState;
@@ -186,6 +187,7 @@ pub type TestCallback = Option<Box<dyn Fn(&TestNotification) + 'static + std::ma
 
 pub struct Test<'a> {
     config: TestConfig,
+    device_synchroniser: Option<DeviceSynchroniser>,
     test_callback: TestCallback,
     // TODO: figure out a better way of representing all of this, it's a little confusing.
     current_stage: usize,
@@ -208,6 +210,7 @@ pub struct Test<'a> {
 impl Test<'_> {
     fn create(
         config: TestConfig,
+        device_synchroniser: Option<DeviceSynchroniser>,
         tx_command: &Sender<Command>,
         test_callback: TestCallback,
         initial_commands: Vec<Command>,
@@ -225,6 +228,7 @@ impl Test<'_> {
         results.push(StageResults::from(&config.stages[0]));
         Test {
             config,
+            device_synchroniser,
             test_callback,
             current_stage: 0,
             results,
@@ -237,6 +241,7 @@ impl Test<'_> {
 
     pub fn create_and_start<'a>(
         config: TestConfig,
+        device_synchroniser: Option<DeviceSynchroniser>,
         tx_command: &'a Sender<Command>,
         valve_state: &mut ValveState,
         test_callback: TestCallback,
@@ -273,7 +278,13 @@ impl Test<'_> {
             duration_deciseconds: 40,
         });
 
-        let test = Self::create(config, tx_command, test_callback, initial_commands);
+        let test = Self::create(
+            config,
+            device_synchroniser,
+            tx_command,
+            test_callback,
+            initial_commands,
+        );
         test.send_notification(&TestNotification::StateChange(TestState::StartedExercise(
             0,
         )));
@@ -499,9 +510,16 @@ impl Test<'_> {
         valve_state: &mut ValveState,
     ) -> Result<StepOutcome, SendError<Command>> {
         match message {
-            Message::Sample(value) => {
-                return self.process_sample(value, valve_state);
-            }
+            Message::Sample(value) => match self
+                .device_synchroniser
+                .as_mut()
+                .map_or(StepDirective::Proceed, |s| s.try_step())
+            {
+                StepDirective::Proceed => {
+                    return self.process_sample(value, valve_state);
+                }
+                StepDirective::Skip => (),
+            },
             Message::Response(command) => match command {
                 // These are already handled by the device_thread. Nevertheless, the
                 // test implementation should be usable independent of the

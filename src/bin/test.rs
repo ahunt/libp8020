@@ -86,6 +86,7 @@ fn main() {
             device.perform_action(Action::StartTest {
                 config: test_config.clone(),
                 test_callback: Some(Box::new(test_callback)),
+                device_synchroniser: None,
             });
             rx_done.recv().expect("rx_done failed");
         }

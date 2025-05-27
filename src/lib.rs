@@ -56,6 +56,7 @@ pub enum Action {
     StartTest {
         config: test_config::TestConfig,
         test_callback: test::TestCallback,
+        device_synchroniser: Option<multidev::DeviceSynchroniser>,
     },
     CancelTest,
     CloseConnection,
@@ -276,6 +277,7 @@ fn start_device_thread(
                     Action::StartTest {
                         config,
                         test_callback,
+                        device_synchroniser,
                     } => {
                         // Clients could send multiple StartTests (while
                         // previous tests are still running). That's OK,
@@ -283,6 +285,7 @@ fn start_device_thread(
                         // will simply be dropped.
                         test = match Test::create_and_start(
                             config,
+                            device_synchroniser,
                             &tx_command,
                             &mut valve_state,
                             test_callback,
