@@ -72,7 +72,9 @@ fn main() {
         } => {
             println!("Exercise {exercise}: FF {fit_factor}")
         }
-        TestNotification::StateChange(TestState::StartedExercise(exercise)) => {
+        TestNotification::StateChange {
+            test_state: TestState::StartedExercise { exercise },
+        } => {
             eprintln!("Started Exercise {0}", exercise + 1);
         }
         _ => (),

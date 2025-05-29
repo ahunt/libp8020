@@ -8,7 +8,7 @@ use crate::ValveState;
 #[repr(C)]
 pub enum TestState {
     Pending,
-    StartedExercise(usize),
+    StartedExercise { exercise: usize },
     Finished,
 }
 
@@ -159,7 +159,7 @@ pub enum TestNotification {
     /// exercise was started. Note that just because a given exercise (or
     /// the entire test) was completed, it is not safe to assume that all
     /// data for that exercise (or the entire test) is available yet.
-    StateChange(TestState),
+    StateChange { test_state: TestState },
     /// ExerciseResult indicates the final FF for a given exercise.
     ExerciseResult {
         device_id: usize,
@@ -171,7 +171,7 @@ pub enum TestNotification {
     /// RawSample in that it contains metadata about how this reading is being
     /// used and where it came from (ambient vs specimen, sample vs purge).
     /// moreover, this data is only available during a test.
-    Sample(SampleData),
+    Sample { data: SampleData },
     LiveFF {
         device_id: usize,
         exercise: usize,
@@ -302,9 +302,9 @@ impl Test<'_> {
             test_callback,
             initial_commands,
         );
-        test.send_notification(&TestNotification::StateChange(TestState::StartedExercise(
-            0,
-        )));
+        test.send_notification(&TestNotification::StateChange {
+            test_state: TestState::StartedExercise { exercise: 0 },
+        });
         Ok(test)
     }
 
@@ -445,12 +445,14 @@ impl Test<'_> {
         let Some(stored_sample_type) = self.store_sample(value, valve_state)? else {
             return Ok(StepOutcome::None);
         };
-        self.send_notification(&TestNotification::Sample(SampleData {
-            device_id: self.device_id,
-            exercise: self.exercises_completed,
-            value,
-            sample_type: stored_sample_type,
-        }));
+        self.send_notification(&TestNotification::Sample {
+            data: SampleData {
+                device_id: self.device_id,
+                exercise: self.exercises_completed,
+                value,
+                sample_type: stored_sample_type,
+            },
+        });
 
         let stage_results = self.results.last().unwrap().clone();
         if let StageResults::Exercise { samples, .. } = &stage_results {
@@ -510,9 +512,11 @@ impl Test<'_> {
             if let StageResults::Exercise { .. } = stage_results {
                 self.exercises_completed += 1;
                 if self.results.len() != self.config.stages.len() {
-                    self.send_notification(&TestNotification::StateChange(
-                        TestState::StartedExercise(self.exercises_completed),
-                    ));
+                    self.send_notification(&TestNotification::StateChange {
+                        test_state: TestState::StartedExercise {
+                            exercise: self.exercises_completed,
+                        },
+                    });
                     let device_exercise = ((self.exercises_completed + 1) % 20) as u8;
                     self.tx_command
                         .send(Command::DisplayExercise(device_exercise))?;
