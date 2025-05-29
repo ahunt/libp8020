@@ -65,8 +65,12 @@ fn main() {
     };
 
     let test_callback = move |notification: &TestNotification| match notification {
-        TestNotification::ExerciseResult(_, index, ff, _err) => {
-            println!("Exercise {index}: FF {ff}")
+        TestNotification::ExerciseResult {
+            exercise,
+            fit_factor,
+            ..
+        } => {
+            println!("Exercise {exercise}: FF {fit_factor}")
         }
         TestNotification::StateChange(TestState::StartedExercise(exercise)) => {
             eprintln!("Started Exercise {0}", exercise + 1);

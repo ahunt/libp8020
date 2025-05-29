@@ -160,9 +160,13 @@ pub enum TestNotification {
     /// the entire test) was completed, it is not safe to assume that all
     /// data for that exercise (or the entire test) is available yet.
     StateChange(TestState),
-    /// ExerciseResult indicates that the FF for device M for exercise N was O with error P.
-    // TODO: migrate to struct-like case.
-    ExerciseResult(usize, usize, f64, f64),
+    /// ExerciseResult indicates the final FF for a given exercise.
+    ExerciseResult {
+        device_id: usize,
+        exercise: usize,
+        fit_factor: f64,
+        error: f64,
+    },
     /// Sample indicates a fresh sample from the 8020. This differs from
     /// RawSample in that it contains metadata about how this reading is being
     /// used and where it came from (ambient vs specimen, sample vs purge).
@@ -409,14 +413,14 @@ impl Test<'_> {
                 ff,
                 ff * f64::sqrt(exercise_err.powi(2) + ambient_err.powi(2)),
             );
-            self.send_notification(&TestNotification::ExerciseResult(
-                self.device_id,
-                self.exercise_ffs.len(),
-                ff,
+            self.send_notification(&TestNotification::ExerciseResult {
+                device_id: self.device_id,
+                exercise: self.exercise_ffs.len(),
+                fit_factor: ff,
                 // This will be completely off in the vicinity of 0 specimen particles (or max
                 // FF).
-                ff * f64::sqrt(exercise_err.powi(2) + ambient_err.powi(2)),
-            ));
+                error: ff * f64::sqrt(exercise_err.powi(2) + ambient_err.powi(2)),
+            });
             self.exercise_ffs.push(ff);
         }
     }
