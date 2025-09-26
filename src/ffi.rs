@@ -24,6 +24,9 @@ pub enum P8020DeviceNotification {
     // Indicates that device properties can now be retrieved via
     // p8020_device_get_properties.
     DevicePropertiesAvailable,
+    TestStarted,
+    TestCompleted,
+    TestCancelled,
 }
 
 /// FFI wrapper for Device.
@@ -132,9 +135,16 @@ impl P8020Device {
                         None,
                     )
                 }
-                DeviceNotification::TestStarted => (None, None),
-                DeviceNotification::TestCompleted { fit_factors } => (None, Some(Ok(fit_factors))),
-                DeviceNotification::TestCancelled => (None, Some(Err(()))),
+                DeviceNotification::TestStarted => {
+                    (Some(P8020DeviceNotification::TestStarted), None)
+                }
+                DeviceNotification::TestCompleted { fit_factors } => (
+                    Some(P8020DeviceNotification::TestCompleted),
+                    Some(Ok(fit_factors)),
+                ),
+                DeviceNotification::TestCancelled => {
+                    (Some(P8020DeviceNotification::TestCancelled), Some(Err(())))
+                }
             };
             if let Some(notification) = notification {
                 callback(&notification, callback_data.get());
