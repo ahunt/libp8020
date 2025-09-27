@@ -90,7 +90,10 @@ impl Device {
             .data_bits(serialport::DataBits::Eight)
             .parity(serialport::Parity::None)
             .stop_bits(serialport::StopBits::One)
-            .flow_control(serialport::FlowControl::Hardware)
+            // (Some?) Legacy 8020's (non-A) won't work with FlowControl enabled. This
+            // has only been seen with an 8020 running PROM v1.7 so far
+            // (https://github.com/ahunt/incolata/issues/20).
+            .flow_control(serialport::FlowControl::None)
             // The timeout is relevant for receiver_thread's behaviour (below).
             .timeout(core::time::Duration::from_millis(100))
             .open()?;
