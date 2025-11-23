@@ -292,7 +292,7 @@ impl Test<'_> {
         }));
         initial_commands.push(Command::DisplayExercise(1));
         initial_commands.push(Command::Beep {
-            duration_deciseconds: 40,
+            duration_deciseconds: 5,
         });
 
         let test = Self::create(
@@ -484,7 +484,7 @@ impl Test<'_> {
                 *valve_state = ValveState::AwaitingSpecimen;
                 self.tx_command.send(Command::ClearDisplay)?;
                 self.tx_command.send(Command::Beep {
-                    duration_deciseconds: 50,
+                    duration_deciseconds: 5,
                 })?;
                 return Ok(StepOutcome::TestComplete);
             }
@@ -521,7 +521,7 @@ impl Test<'_> {
                     self.tx_command
                         .send(Command::DisplayExercise(device_exercise))?;
                     self.tx_command.send(Command::Beep {
-                        duration_deciseconds: 10,
+                        duration_deciseconds: 2,
                     })?;
                 }
             }
