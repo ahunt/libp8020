@@ -26,13 +26,14 @@ pub struct Synchroniser {
 }
 
 impl Synchroniser {
+    #[allow(dead_code)] // TODO: remove once multidevice support is fully implemented.
     pub fn new(device_count: usize) -> Arc<Synchroniser> {
         let mut counters = Vec::with_capacity(device_count);
         for _ in 0..device_count {
             counters.push(AtomicU64::new(0));
         }
         Arc::new(Synchroniser {
-            counters: counters,
+            counters,
             per_device_leases: Arc::new(Mutex::new(vec![false; device_count])),
         })
     }
@@ -44,6 +45,7 @@ pub struct DeviceSynchroniser {
 }
 
 impl DeviceSynchroniser {
+    #[allow(dead_code)] // TODO: remove once multidevice support is fully implemented.
     fn new(
         synchroniser: &Arc<Synchroniser>,
         device_id: usize,
