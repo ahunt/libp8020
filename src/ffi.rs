@@ -13,6 +13,7 @@ use crate::test_config::builtin;
 use crate::test_config::TestConfig;
 use crate::{Action, Device, DeviceNotification, DeviceProperties};
 
+#[allow(dead_code)] // All fields read via FFI
 #[repr(C)]
 pub enum P8020DeviceNotification {
     Sample {
@@ -189,8 +190,7 @@ impl P8020Device {
         };
 
         let exercise_count = device_fit_factors.len();
-        let mut fit_factors = Vec::with_capacity(1);
-        fit_factors.push(device_fit_factors);
+        let fit_factors = vec![device_fit_factors];
 
         Box::into_raw(Box::new(P8020TestResult {
             exercise_count,
