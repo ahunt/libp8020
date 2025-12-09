@@ -286,18 +286,14 @@ fn start_device_thread(
                         // previous tests are still running). That's OK,
                         // starting a new test is idempotent - and old tests
                         // will simply be dropped.
-                        test = match Test::create_and_start(
+                        test = Test::create_and_start(
                             config,
                             device_synchroniser,
                             &tx_command,
                             &mut valve_state,
                             test_callback,
-                        ) {
-                            Ok(test) => Some(test),
-                            // No need to send ConnectionClosed here - see comment in
-                            // send_command above.
-                            Err(_) => None,
-                        };
+                        )
+                        .ok();
                         send_notification(DeviceNotification::TestStarted);
                     }
                     Action::CancelTest => {
