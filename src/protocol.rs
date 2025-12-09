@@ -68,7 +68,7 @@ impl Command {
             Command::Beep {
                 duration_deciseconds,
             } => match duration_deciseconds {
-                1..=60 => Ok(format!("B{:02}", duration_deciseconds)),
+                1..=60 => Ok(format!("B{duration_deciseconds:02}")),
                 _ => Err(InvalidCommandError::OutOfRange {
                     command: self.clone(),
                     allowed_range: std::ops::Range { start: 1, end: 61 },
@@ -77,7 +77,7 @@ impl Command {
             Command::ValveAmbient => Ok("VN".to_string()),
             Command::ValveSpecimen => Ok("VF".to_string()),
             Command::DisplayExercise(exercise) => match exercise {
-                0..=19 => Ok(format!("N{:02}", exercise)),
+                0..=19 => Ok(format!("N{exercise:02}")),
                 _ => Err(InvalidCommandError::OutOfRange {
                     command: self.clone(),
                     allowed_range: std::ops::Range { start: 0, end: 20 },
@@ -445,8 +445,7 @@ pub fn parse_message(message: &str) -> Result<Message, ParseError> {
         ref message if message.starts_with("E") => {
             // TODO: try to parse command recursively.
             Ok(Message::UnknownError(format!(
-                "Error parsing not yet implemented: {}",
-                message
+                "Error parsing not yet implemented: {message}"
             )))
         }
         ref message if message.starts_with("S") => match parse_setting(message) {
