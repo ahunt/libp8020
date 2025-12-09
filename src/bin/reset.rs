@@ -5,7 +5,7 @@ const DEVICE: &str = "/dev/ttyUSB0";
 
 fn send(port: &mut Box<dyn serialport::SerialPort>, msg: &str) {
     if !msg.is_ascii() {
-        eprintln!("Unexpected non-ascii msg: {}", msg);
+        eprintln!("Unexpected non-ascii msg: {msg}");
         // TODO: switch to proper error handling.
         std::process::exit(0);
     }
