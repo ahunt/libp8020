@@ -24,4 +24,4 @@ jobs:
         run: cargo -v test
       - name: Clippy
         # Does not fail on warnings (only prints).
-        run: cargo clippy
+        run: cargo clippy -- -D warnings
