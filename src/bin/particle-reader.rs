@@ -25,7 +25,7 @@ fn main() {
                     "[year]-[month]-[day]T[hour]:[minute]:[second]"
                 );
                 let formatted_date_time = date_time.format(&format).unwrap();
-                println!("{},{}", formatted_date_time, particle_conc);
+                println!("{formatted_date_time},{particle_conc}");
             }
             DeviceNotification::ConnectionClosed => {
                 tx_connection_closed.send(()).unwrap();
