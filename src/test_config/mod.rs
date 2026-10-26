@@ -177,7 +177,7 @@ impl TestConfig {
         Ok(())
     }
 
-    pub fn parse_from_csv(csv: &mut dyn std::io::BufRead) -> Result<TestConfig, ParseError> {
+    pub fn parse_from_csv(csv: &mut dyn std::io::BufRead) -> Result<TestConfig, ParseError<'_>> {
         // This could be implemented using a csv parser. But... aside from NIH,
         // I'm averse to including more deps just to save 5 lines.
         // Ooops... looks like it's actually about 20 lines (modulo

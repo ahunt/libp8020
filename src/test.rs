@@ -226,7 +226,7 @@ impl Test<'_> {
         tx_command: &Sender<Command>,
         test_callback: TestCallback,
         initial_commands: Vec<Command>,
-    ) -> Test {
+    ) -> Test<'_> {
         let stage_count = config.stages.len();
         assert!(
             stage_count >= 3,
