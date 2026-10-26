@@ -294,8 +294,8 @@ pub extern "C" fn config_exercise_name(config: &TestConfig, index: usize) -> *mu
 
 #[export_name = "p8020_string_free"]
 pub unsafe extern "C" fn string_free(name: *mut c_char) {
-    if name != std::ptr::null_mut() {
-      drop(Box::from_raw(name));
+    if !name.is_null() {
+        drop(Box::from_raw(name));
     }
 }
 
