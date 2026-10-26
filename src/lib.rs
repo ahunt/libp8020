@@ -203,17 +203,24 @@ impl DevicePropertiesCollector {
             _ => (),
         }
 
-        if self.serial_number.is_some()
-            && self.run_time_since_last_service_hours.is_some()
-            && self.last_service_month.is_some()
-            && self.last_service_year.is_some()
-        {
-            Some(DeviceNotification::DeviceProperties(DeviceProperties {
-                serial_number: self.serial_number.take().unwrap(),
-                run_time_since_last_service_hours: self.run_time_since_last_service_hours.unwrap(),
-                last_service_month: self.last_service_month.unwrap(),
-                last_service_year: self.last_service_year.unwrap(),
-            }))
+        if let (
+            Some(run_time_since_last_service_hours),
+            Some(last_service_month),
+            Some(last_service_year),
+        ) = (
+            self.run_time_since_last_service_hours,
+            self.last_service_month,
+            self.last_service_year,
+        ) {
+            // TODO: consider switching to let-chaining here once migrated to rust 2024.
+            self.serial_number.as_ref().map(|serial_number| {
+                DeviceNotification::DeviceProperties(DeviceProperties {
+                    serial_number: serial_number.clone(),
+                    run_time_since_last_service_hours,
+                    last_service_month,
+                    last_service_year,
+                })
+            })
         } else {
             None
         }
