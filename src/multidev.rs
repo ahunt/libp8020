@@ -74,7 +74,7 @@ impl DeviceSynchroniser {
         }
 
         let this = &self.synchroniser.counters[self.device_id];
-        match this.fetch_update(Ordering::Acquire, Ordering::Relaxed, |x| {
+        match this.try_update(Ordering::Acquire, Ordering::Relaxed, |x| {
             if x <= min {
                 Some(x + 1)
             } else {
